@@ -1,0 +1,155 @@
+"""
+CLI training script for Arabic ITSM classification.
+
+Usage:
+    python scripts/train.py --task l1 --epochs 5 --lr 2e-5
+    python scripts/train.py --task l1 --config configs/model_config.yaml
+
+This script wraps the logic in Notebook 04 into a reusable CLI suitable
+for running on cloud compute (Colab, Kaggle, cloud VM) or locally.
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description="Fine-tune MarBERTv2 on Arabic ITSM tickets")
+    p.add_argument("--task", default="l1", choices=["l1", "l2", "priority"],
+                   help="Classification task (default: l1)")
+    p.add_argument("--model", default="UBC-NLP/MARBERTv2",
+                   help="HuggingFace model ID")
+    p.add_argument("--data-dir", default="data/processed",
+                   help="Directory with processed train/val/test CSV files")
+    p.add_argument("--output-dir", default="models",
+                   help="Directory to save checkpoints")
+    p.add_argument("--epochs", type=int, default=5)
+    p.add_argument("--lr", type=float, default=2e-5)
+    p.add_argument("--batch-size", type=int, default=16)
+    p.add_argument("--max-length", type=int, default=128)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--no-fp16", action="store_true",
+                   help="Disable mixed-precision training")
+    p.add_argument("--config", default=None,
+                   help="Path to model_config.yaml (overrides individual args)")
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+
+    # Lazy imports — only load heavy packages when actually running
+    import torch
+    import numpy as np
+    import pandas as pd
+    import pickle
+    from torch.utils.data import DataLoader
+    from torch.optim import AdamW
+    from transformers import AutoTokenizer, get_linear_schedule_with_warmup
+    import mlflow
+    from tqdm.auto import tqdm
+
+    from arabic_itsm.data.preprocessing import ArabicTextNormalizer
+    from arabic_itsm.data.dataset import ITSMDataset
+    from arabic_itsm.models.classifier import MarBERTClassifier
+    from arabic_itsm.utils.metrics import compute_classification_metrics
+
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    use_fp16 = device.type == "cuda" and not args.no_fp16
+    print(f"Device: {device} | FP16: {use_fp16}")
+
+    data_dir = Path(args.data_dir)
+    out_dir = Path(args.output_dir) / f"marbert_{args.task}_best"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    train_df = pd.read_csv(data_dir / "train.csv")
+    val_df = pd.read_csv(data_dir / "val.csv")
+
+    with open(data_dir / "label_encoders.pkl", "rb") as f:
+        label_encoders = pickle.load(f)
+
+    num_classes = len(label_encoders[args.task].classes_)
+    print(f"Task: {args.task} | Classes: {num_classes}")
+
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    normalizer = ArabicTextNormalizer()
+
+    train_ds = ITSMDataset(train_df, tokenizer, normalizer,
+                           {args.task: label_encoders[args.task]},
+                           args.max_length, tasks=[args.task])
+    val_ds = ITSMDataset(val_df, tokenizer, normalizer,
+                         {args.task: label_encoders[args.task]},
+                         args.max_length, tasks=[args.task])
+
+    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=False)
+
+    model = MarBERTClassifier(args.model, {args.task: num_classes}).to(device)
+
+    optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+    total_steps = len(train_loader) * args.epochs
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, int(0.06 * total_steps), total_steps
+    )
+    scaler = torch.cuda.amp.GradScaler(enabled=use_fp16)
+
+    best_f1 = 0.0
+    mlflow.set_experiment("arabic-itsm-marbert")
+
+    with mlflow.start_run():
+        mlflow.log_params(vars(args))
+
+        for epoch in range(1, args.epochs + 1):
+            model.train()
+            for batch in tqdm(train_loader, desc=f"Epoch {epoch}"):
+                ids = batch["input_ids"].to(device)
+                mask = batch["attention_mask"].to(device)
+                labels = batch[f"label_{args.task}"].to(device)
+
+                with torch.cuda.amp.autocast(enabled=use_fp16):
+                    out = model(ids, mask, **{f"label_{args.task}": labels})
+                    loss = out["loss"]
+
+                scaler.scale(loss).backward()
+                scaler.unscale_(optimizer)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                scaler.step(optimizer)
+                scaler.update()
+                scheduler.step()
+                optimizer.zero_grad()
+
+            # Validation
+            model.eval()
+            all_preds, all_labels = [], []
+            with torch.no_grad():
+                for batch in val_loader:
+                    ids = batch["input_ids"].to(device)
+                    mask = batch["attention_mask"].to(device)
+                    out = model(ids, mask)
+                    preds = torch.argmax(out[f"logits_{args.task}"], dim=-1)
+                    all_preds.extend(preds.cpu().numpy())
+                    all_labels.extend(batch[f"label_{args.task}"].numpy())
+
+            metrics = compute_classification_metrics(all_labels, all_preds)
+            print(f"Epoch {epoch} | val_macro_f1={metrics['macro_f1']:.4f}")
+            mlflow.log_metrics(metrics, step=epoch)
+
+            if metrics["macro_f1"] > best_f1:
+                best_f1 = metrics["macro_f1"]
+                model.encoder.save_pretrained(str(out_dir))
+                tokenizer.save_pretrained(str(out_dir))
+                torch.save(model.heads.state_dict(), out_dir / "heads.pt")
+                print(f"  ✓ Checkpoint saved (f1={best_f1:.4f})")
+
+    print(f"\nDone. Best val macro-F1: {best_f1:.4f}")
+    print(f"Checkpoint: {out_dir}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,43 @@
+# arabic-itsm-classification — Python dependencies
+# Python 3.10+
+
+# Core ML
+torch>=2.1.0
+transformers>=4.38.0
+datasets>=2.18.0
+accelerate>=0.27.0
+evaluate>=0.4.1
+
+# Arabic NLP
+arabert>=1.0.1          # Arabic preprocessing utilities (farasa-based)
+pyarabic>=0.6.15        # Arabic text utilities (diacritics, normalization)
+
+# Data science
+pandas>=2.1.0
+numpy>=1.26.0
+scikit-learn>=1.4.0
+
+# Visualization
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.18.0
+
+# Notebooks
+jupyter>=1.0.0
+ipywidgets>=8.1.0
+tqdm>=4.66.0
+
+# Experiment tracking
+mlflow>=2.10.0
+
+# Configuration
+pyyaml>=6.0.1
+python-dotenv>=1.0.0
+
+# Export / serving
+onnx>=1.15.0
+onnxruntime>=1.17.0
+
+# Utilities
+tokenizers>=0.15.0
+safetensors>=0.4.2

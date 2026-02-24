@@ -1,0 +1,45 @@
+# Data configuration for Arabic ITSM Classification
+
+dataset:
+  # Remote sources — no local clone required
+  csv_url: "https://raw.githubusercontent.com/bazokhan/arabic-itsm-dataset/master/dataset_clean.csv"
+  jsonl_url: "https://raw.githubusercontent.com/bazokhan/arabic-itsm-dataset/master/dataset_clean.jsonl"
+  taxonomy_url: "https://raw.githubusercontent.com/bazokhan/arabic-itsm-dataset/master/taxonomy_itsm_v1.json"
+  hf_repo: "albaz2000/arabic-itsm-dataset"    # Alternative: datasets.load_dataset(hf_repo)
+
+  # Text fields used as model input
+  text_fields:
+    - title_ar
+    - description_ar
+
+  # Label fields
+  label_fields:
+    l1: category_level_1
+    l2: category_level_2
+    l3: category_level_3
+    priority: priority
+    sentiment: sentiment
+
+split:
+  train: 0.70
+  val: 0.15
+  test: 0.15
+  stratify_by: category_level_1   # Stratify on L1 to keep class balance
+  random_seed: 42
+
+preprocessing:
+  # Arabic normalization steps applied before tokenization
+  remove_diacritics: true
+  normalize_alef: true          # ا أ إ آ → ا
+  normalize_teh_marbuta: true   # ة → ه (optional, off by default)
+  normalize_teh_marbuta_default: false
+  remove_punctuation: false     # Keep punctuation — MarBERT handles it
+  lowercase_latin: true         # Lowercase any embedded Latin chars
+  max_length: 128               # MarBERT max tokens per sample
+
+output:
+  processed_dir: "data/processed/"
+  train_file: "data/processed/train.csv"
+  val_file: "data/processed/val.csv"
+  test_file: "data/processed/test.csv"
+  label_encoders: "data/processed/label_encoders.pkl"

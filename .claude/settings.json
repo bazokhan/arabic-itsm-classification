@@ -1,0 +1,31 @@
+{
+  "projectContext": {
+    "name": "arabic-itsm-classification",
+    "type": "academic-ml",
+    "description": "MarBERTv2 fine-tuning for Arabic ITSM ticket classification — Cairo University Master's project",
+    "primaryLanguage": "python",
+    "linkedRepos": [
+      "https://github.com/bazokhan/arabic-itsm-dataset"
+    ]
+  },
+  "documentation": {
+    "trackingFile": "CLAUDE.md",
+    "decisionRecordsDir": "docs/decisions/",
+    "universityReport": true
+  },
+  "importantPaths": {
+    "dataset": "https://raw.githubusercontent.com/bazokhan/arabic-itsm-dataset/master/dataset_clean.csv",
+    "taxonomy": "https://raw.githubusercontent.com/bazokhan/arabic-itsm-dataset/master/taxonomy_itsm_v1.json",
+    "modelConfig": "configs/model_config.yaml",
+    "dataConfig": "configs/data_config.yaml",
+    "notebooks": "notebooks/",
+    "sourcePackage": "src/arabic_itsm/"
+  },
+  "conventions": {
+    "notebookNaming": "NN_snake_case_description.ipynb (01, 02, ...)",
+    "experimentIds": "EXP-NNN format, logged in CLAUDE.md Experiment Log",
+    "decisionIds": "ADR-NNN format, logged in CLAUDE.md and docs/decisions/",
+    "modelCheckpoints": "models/<task>_<model>_<run_id>/",
+    "resultFiles": "results/metrics/<exp_id>_metrics.json, results/figures/<exp_id>_<plot>.png"
+  }
+}

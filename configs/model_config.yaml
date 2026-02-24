@@ -1,0 +1,74 @@
+# Model configuration for Arabic ITSM Classification
+
+model:
+  # Primary encoder — MarBERTv2 (UBC-NLP, Feb 2026 recommendation)
+  # See docs/model_recommendation.md for full rationale
+  base_model: "UBC-NLP/MARBERTv2"
+  max_length: 128
+
+  # Classification heads — one per task
+  heads:
+    l1:
+      enabled: true
+      num_classes: 6        # Access, Hardware, Network, Security, Service, Software
+      dropout: 0.1
+    l2:
+      enabled: true
+      num_classes: 14
+      dropout: 0.1
+    l3:
+      enabled: false        # Disabled in initial runs — too sparse per class
+      num_classes: 31
+      dropout: 0.15
+    priority:
+      enabled: true
+      num_classes: 5        # Priority 1-5
+      dropout: 0.1
+    sentiment:
+      enabled: false        # Separate fine-tune if needed
+      num_classes: 4        # positive, neutral, negative, mixed
+      dropout: 0.1
+
+training:
+  # Optimizer
+  optimizer: adamw
+  learning_rate: 2.0e-5
+  weight_decay: 0.01
+
+  # Scheduler
+  lr_scheduler: linear_with_warmup
+  warmup_ratio: 0.06         # 6% of total steps as warmup
+
+  # Batch sizes
+  per_device_train_batch_size: 16
+  per_device_eval_batch_size: 32
+  gradient_accumulation_steps: 2   # Effective batch = 32
+
+  # Training duration
+  num_train_epochs: 5
+  max_steps: -1              # -1 = use epochs, not steps
+
+  # Early stopping
+  early_stopping_patience: 2
+  metric_for_best_model: "eval_macro_f1"
+  greater_is_better: true
+
+  # Mixed precision
+  fp16: true                 # Enable on CUDA GPU; disable on CPU
+
+  # Reproducibility
+  seed: 42
+
+  # Logging & checkpointing
+  logging_steps: 50
+  eval_steps: 200
+  save_steps: 200
+  save_total_limit: 3
+  load_best_model_at_end: true
+
+output:
+  model_dir: "models/"
+  l1_checkpoint: "models/marbert_l1_best/"
+  l2_checkpoint: "models/marbert_l2_best/"
+  priority_checkpoint: "models/marbert_priority_best/"
+  mlflow_experiment: "arabic-itsm-marbert"

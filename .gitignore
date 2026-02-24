@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.*
+
+# Model weights — large binary artifacts, not committed
+models/*
+!models/.gitkeep
+*.pt
+*.bin
+*.safetensors
+*.onnx
+
+# Results — generated artifacts
+results/*
+!results/.gitkeep
+
+# Data — dataset lives in sibling repo, not committed here
+data/*
+!data/.gitkeep
+
+# MLflow experiment tracking
+mlruns/
+mlartifacts/
+
+# Weights & Biases
+wandb/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# HuggingFace cache
+.cache/

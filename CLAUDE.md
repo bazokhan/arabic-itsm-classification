@@ -7,6 +7,14 @@ It will serve as a primary source for the university post-project documentation 
 
 ---
 
+## Assistant Operating Baseline
+
+- Follow repository-local instructions in `AGENTS.md` as the primary operating policy.
+- Keep experiment reporting reproducible by anchoring claims to notebook outputs and files under `results/`.
+- Archive each full pipeline analysis by run number (`analysis_run_001.md`, `analysis_run_002.md`, ...).
+
+---
+
 ## Project Identity
 
 | Field            | Value                                                                 |
@@ -32,8 +40,8 @@ It will serve as a primary source for the university post-project documentation 
 | Dialect           | Egyptian Arabic (عامية مصرية) with EN code-mixing       |
 | Generation        | LLM-generated (Gemini), validated programmatically      |
 | L1 categories     | 6 (Access, Network, Hardware, Software, Security, Service) |
-| L2 categories     | 14                                                      |
-| L3 categories     | 31                                                      |
+| L2 categories     | 16 (documented as 14 — 2 extra found in Notebook 02)    |
+| L3 categories     | 48 (documented as 31 — 17 extra found in Notebook 02)   |
 | Labels            | category_level_1/2/3, priority (1-5), sentiment        |
 | Format            | CSV + JSONL                                             |
 
@@ -67,14 +75,32 @@ It will serve as a primary source for the university post-project documentation 
 - **Rationale**: Maintains class distribution across splits; 1,500 test samples sufficient for reliable metric estimation; validation set sized for hyperparameter search
 - **Status**: Accepted
 
+### ADR-005 — Dataset Deduplication Applied in Preprocessing, Not at Source
+- **Date**: February 2026
+- **Decision**: Remove 451 exact duplicate (title_ar, description_ar) pairs during preprocessing in Notebook 02, not by modifying the source dataset CSV on GitHub/HuggingFace.
+- **Rationale**: Duplicates create data leakage when identical texts land in both train and test splits, artificially inflating all metrics. Fixing in preprocessing rather than at source preserves the raw dataset as a stable, citable artefact while keeping the transformation explicit and reproducible. This is standard ML practice and must be documented in the methodology chapter of the thesis.
+- **What was NOT changed**: The source dataset (`bazokhan/arabic-itsm-dataset`) is unchanged. The L2 (16 classes) and L3 (48 classes) counts were found to be correct — the dataset README had the wrong numbers (14/31). The README of the dataset repo should be updated to reflect the true counts.
+- **Impact**: Post-dedup dataset size is ~9,549 tickets (down from 10,000). Train/val/test splits are recomputed from the deduplicated base.
+- **Status**: Accepted — applied in Notebook 02 cell `162d9cc6`
+
+### ADR-006 — PyTorch Installation Must Specify CUDA Wheel Explicitly
+- **Date**: February 2026
+- **Decision**: Do not use bare `pip install torch`. Always install via the PyTorch CUDA index URL: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
+- **Rationale**: Bare `pip install torch` on Windows silently installs the CPU-only wheel (`torch 2.x+cpu`). This caused a complete training failure in EXP-002 — `torch.cuda.is_available()` returned `False` despite a functional RTX 3050 GPU being present. The error is silent and the model trains for hours on CPU before the failure is detectable.
+- **Consequences**: `requirements.txt` now contains a comment block instead of a bare `torch` entry. All new environment setups must follow the two-step procedure: (1) update NVIDIA driver ≥550, (2) install CUDA wheel.
+- **Status**: Accepted
+
 ---
 
 ## Experiment Log
 
-| ID   | Date | Task | Model | Epochs | LR | Batch | Val F1 (macro) | Test F1 (macro) | Notes |
-|------|------|------|-------|--------|-----|-------|----------------|-----------------|-------|
-| EXP-001 | — | L1 baseline | TF-IDF + LR | — | — | — | — | — | Pending |
-| EXP-002 | — | L1 | MarBERTv2 | — | — | — | — | — | Pending |
+| ID | Date | Task | Model | Epochs | LR | Batch | Val F1 (macro) | Test F1 (macro) | Notes |
+|----|------|------|-------|--------|-----|-------|----------------|-----------------|-------|
+| EXP-001a | 2026-02-24 | L1 baseline | TF-IDF + LR (word+char) | — | — | — | 0.8852 | 0.8748 | 3.1s train, 0.24ms infer |
+| EXP-001b | 2026-02-24 | L1 baseline | TF-IDF + LinearSVC (word+char) | — | — | — | 0.8817 | **0.8840** | 6.1s train, 0.23ms infer — best baseline |
+| EXP-001c | 2026-02-24 | L1 baseline | TF-IDF + Naive Bayes (word) | — | — | — | 0.8628 | 0.8526 | 0.3s train, 0.04ms infer |
+| EXP-002 | 2026-02-24 | L1 | MarBERTv2 | 3 (early stop) | 2e-5 | 32 | 0.1316 | 0.1236 | **FAILED** — CPU-only training (`torch+cpu` build). Mode collapsed to "Service". Archived in `docs/analysis_run_001.md` |
+| EXP-003 | 2026-02-24 | L1 | MarBERTv2 (GPU) | 4 (best at epoch 2) | 2e-5 | 32 | **0.8938** | **0.8910** | **SUCCESS** — CUDA+FP16 run. Accuracy 0.8904, infer 9.2ms/sample. Detailed analysis: `docs/analysis_run_002.md` |
 
 ---
 
@@ -83,12 +109,16 @@ It will serve as a primary source for the university post-project documentation 
 - [x] Dataset created and published (`arabic-itsm-dataset`)
 - [x] Model selection documented (`docs/model_recommendation.md`)
 - [x] Repo scaffolded with notebooks, src, configs
-- [ ] Notebook 01: Data inspection complete (with outputs)
-- [ ] Notebook 02: Data preparation pipeline complete
-- [ ] Notebook 03: Baseline models run and results recorded
-- [ ] Notebook 04: MarBERTv2 fine-tuning — first run complete
+- [x] Notebook 01: Data inspection complete (with outputs)
+- [x] Notebook 02: Data preparation pipeline complete
+- [x] Notebook 03: Baseline models run and results recorded (LinearSVC best: 88.40% macro-F1 on dedup split)
+- [x] Notebook 04: MarBERTv2 first run complete (failed — CPU env, documented in EXP-002)
+- [x] Notebook 05: Evaluation run complete (on failed model — results invalid, to be rerun after GPU fix)
+- [x] Infrastructure issue diagnosed and documented: CPU-only PyTorch wheel, driver update required (ADR-005)
+- [x] NVIDIA driver updated to ≥550 + PyTorch reinstalled with CUDA 12.1 (prerequisite for EXP-003)
+- [x] Notebook 04: MarBERTv2 GPU retraining — EXP-003
+- [x] Notebook 05: Re-evaluation after successful GPU training
 - [ ] Notebook 04: Hyperparameter sweep complete
-- [ ] Notebook 05: Final evaluation and results analysis
 - [ ] Model exported and saved to `models/`
 - [ ] University documentation draft started
 - [ ] Web demo prototype (cloud deployment)
@@ -139,9 +169,13 @@ It will serve as a primary source for the university post-project documentation 
 
 ## Known Issues & Workarounds
 
-| Issue | Platform | Fix |
-|-------|----------|-----|
-| `mlflow ui` crashes with `OSError: [WinError 10022]` | Windows | Run `mlflow ui --workers 1` — disables multiprocess socket sharing which fails on Windows |
+| Issue | Platform | Root Cause | Fix |
+|-------|----------|------------|-----|
+| `mlflow ui` crashes with `OSError: [WinError 10022]` | Windows | MLflow's default multi-worker uvicorn tries to share sockets across processes — not supported on Windows | Run `mlflow ui --workers 1` |
+| `torch.cuda.is_available()` returns `False` despite NVIDIA GPU present | Windows | `pip install torch` installs the CPU-only wheel (`torch 2.x+cpu`) by default | (1) Update NVIDIA driver to ≥550 from nvidia.com; (2) `pip uninstall torch torchvision torchaudio -y`; (3) `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121` |
+| `FutureWarning: torch.cuda.amp.GradScaler` deprecated | All | Old API path changed in PyTorch 2.x | Use `torch.amp.GradScaler(device_type, enabled=flag)` — fixed in Notebook 04 cell `79e8d5a5` |
+| `UserWarning: pin_memory set but no accelerator found` | CPU | `pin_memory=True` hardcoded in DataLoader | Make conditional: `pin_memory=(DEVICE.type == 'cuda')` — fixed in Notebook 04 cell `89917262` |
+| MarBERT LOAD REPORT shows UNEXPECTED keys | All | Normal — MLM/NSP head weights from pretraining are discarded when loading bare encoder | Expected behaviour, safe to ignore. Documented in Notebook 04 cell `91ecb08a` |
 
 ---
 
@@ -152,3 +186,8 @@ It will serve as a primary source for the university post-project documentation 
 | 2026-02-24 | Initial repo scaffold: README, CLAUDE.md, folder structure, configs, src package, 5 demo notebooks created |
 | 2026-02-24 | Fixed all dataset references to use GitHub/HuggingFace URLs (no local clone required). Rewrote model_recommendation.md as full academic comparative analysis. |
 | 2026-02-24 | Diagnosed MLflow WinError 10022 — fixed with `--workers 1` flag |
+| 2026-02-24 | Fixed FutureWarning in Notebook 04: `torch.cuda.amp` → `torch.amp` (device-agnostic API). Documented MarBERT UNEXPECTED keys as normal behaviour. |
+| 2026-02-24 | All 5 notebooks executed. Baselines complete. MarBERT failed (EXP-002) — mode collapsed to "Service", val F1=0.1316. Initial root-cause analysis archived as `docs/analysis_run_001.md`. |
+| 2026-02-24 | GPU investigation: diagnosed `torch 2.10.0+cpu` CPU-only wheel + NVIDIA driver 462.62 (too old for CUDA 12.x). Documented fix path in `docs/analysis_run_001.md` and CLAUDE.md Known Issues. ADR-006 added. Notebook 04 pin_memory logic fixed. |
+| 2026-02-24 | Dataset quality review: 451 duplicates confirmed as data leakage risk — dedup applied in Notebook 02 preprocessing (not at source). L2/L3 class count discrepancy investigated — data is correct, README documentation was wrong. ADR-005 documents the decision. |
+| 2026-02-24 | Run-1 analysis archived to `docs/analysis_run_001.md`. Full post-fix GPU rerun completed (EXP-003): best val macro-F1=0.8938, test macro-F1=0.8910, test accuracy=0.8904, latency=9.2ms/sample. Comprehensive report added as `docs/analysis_run_002.md`. |

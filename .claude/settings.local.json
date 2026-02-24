@@ -3,7 +3,8 @@
     "allow": [
       "Bash(python3:*)",
       "Bash(/d/Installations/miniconda/python:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(head:*)"
     ]
   }
 }

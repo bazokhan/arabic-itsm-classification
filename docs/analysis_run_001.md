@@ -154,9 +154,11 @@ The validation loss of **1.8216** is almost exactly `−log(1/6) = 1.7918`, the 
 
 Train loss rose from 1.8250 → 1.8268 → 1.8282 across epochs. Loss increasing during training on a pretrained model is a strong indicator that the learning rate is causing **weight degradation rather than adaptation**. The encoder's carefully learned representations are being perturbed without converging toward a useful task-specific state.
 
-**Diagnostic signal 3 — CPU-only training**
+**Diagnostic signal 3 — CPU-only training (root cause identified)**
 
-The setup cell reported `Device: cpu | FP16: False`. Training a 163M-parameter transformer on CPU is feasible but extremely slow (~30–60 minutes per epoch on this hardware for 7,000 samples at batch_size=16). More critically, CPU training without mixed precision introduces **numerical precision issues** in the gradient flow through deep networks. AdamW's second-moment estimates and the scheduler's warmup interact poorly with FP32 precision over long sequences when no GPU acceleration is available.
+The setup cell reported `Device: cpu | FP16: False`. This was traced to a specific environment problem in a follow-up investigation (see Section 7 for the full diagnosis). The installed PyTorch build was `2.10.0+cpu` — a CPU-only wheel with no CUDA support compiled in. This means `torch.cuda.is_available()` always returned `False` regardless of the GPU hardware, because the PyTorch library itself had no GPU code linked.
+
+Training a 163M-parameter transformer on CPU is extremely slow (~30–60 minutes per epoch for 7,000 samples at batch_size=16). More critically, CPU training without mixed precision introduces **numerical precision issues** in the gradient flow through deep networks. AdamW's second-moment estimates and the scheduler's warmup interact poorly with FP32 precision over long sequences when no GPU acceleration is available.
 
 **Diagnostic signal 4 — `pin_memory=True` warning on CPU**
 
@@ -173,12 +175,18 @@ All high-confidence errors in Notebook 05 predict "Service". The model predicted
 
 ### 4.3 How to Fix This
 
-**Fix 1 (Essential): Train on GPU**
+**Fix 1 (Essential): Enable local GPU — reinstall PyTorch with CUDA support**
 
-Move the notebook to Google Colab or Kaggle with a free GPU:
+The machine has a **NVIDIA GeForce RTX 3050 Laptop GPU (4 GB VRAM)** which is fully capable of training MarBERT. The problem was not the hardware — it was the PyTorch installation. See Section 7 for the full step-by-step fix. In summary:
 
-- **Google Colab** (free T4 GPU): Upload the notebook, mount Drive, install requirements, run. One epoch will take ~3–5 minutes instead of ~45 minutes.
-- **Kaggle Notebooks** (free P100 GPU): Similar setup, 30 hours/week free GPU.
+1. Update NVIDIA driver (current: 462.62 / CUDA 11.2 max) to the latest (≥550, which supports CUDA 12.x)
+2. Uninstall the CPU-only wheel: `pip uninstall torch torchvision torchaudio -y`
+3. Reinstall with CUDA support: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
+4. Verify: `python -c "import torch; print(torch.cuda.is_available())"` should print `True`
+
+Once the GPU is active, Notebook 04 requires **no other changes** — the `DEVICE`, `USE_FP16`, and `pin_memory` logic activates automatically. Expected training time drops from ~45 min/epoch to ~3–5 min/epoch.
+
+**Alternative (cloud, if local fix is deferred):** Google Colab (free T4 GPU) or Kaggle (free P100, 30 hrs/week). Upload the notebook, mount Drive, install requirements, run.
 
 With a GPU the training will converge in 2–3 epochs and you should see val macro-F1 in the 0.88–0.96 range based on published MarBERT benchmarks.
 
@@ -305,3 +313,133 @@ Based on MarBERT's published performance on comparable Egyptian Arabic classific
 | Improvement over LinearSVC | +4 to +9 pp macro-F1 |
 
 The Access and Security classes (current baselines: F1=0.849, 0.835) are expected to improve most from the transformer's contextual understanding, since their confusion with each other stems from shared surface vocabulary that a bag-of-words model cannot disambiguate but attention-based encoding can.
+
+---
+
+## 7. Environment Investigation: GPU Not Detected — Diagnosis & Fix
+
+*This section documents a post-experiment infrastructure investigation conducted to explain and permanently resolve the CPU-only training failure.*
+
+### 7.1 Problem Statement
+
+After completing all five notebooks, the training failure in Notebook 04 was re-examined. The symptom was clear: `Device: cpu | FP16: False`. The machine is a Windows 11 laptop with an NVIDIA GeForce RTX 3050 (4 GB VRAM) — a GPU that is fully capable of fine-tuning a 163M-parameter transformer model. The question was: why did PyTorch not detect it?
+
+### 7.2 Diagnosis Steps
+
+**Step 1 — Inspect the PyTorch build**
+
+```python
+import torch
+print(torch.__version__)    # Output: 2.10.0+cpu
+print(torch.version.cuda)   # Output: None
+print(torch.cuda.is_available())  # Output: False
+```
+
+The `+cpu` suffix in the version string is definitive. This is a **CPU-only PyTorch wheel** — no CUDA runtime is compiled into the library at all. It is a different binary from the standard PyTorch release and has no GPU capability regardless of what hardware is installed.
+
+**Step 2 — Check the NVIDIA driver**
+
+```
+nvidia-smi
+```
+
+Output:
+```
+Driver Version: 462.62    CUDA Version: 11.2
+GPU: GeForce RTX 305... WDDM
+```
+
+The GPU is present and the driver is functional. However, **driver 462.62 is from early 2021** and supports a maximum CUDA toolkit version of 11.2. Modern PyTorch CUDA builds (cu117, cu118, cu121) require Windows driver ≥ 516.31. This means even if the CUDA-enabled PyTorch wheel had been installed, it would fail to run without a driver update first.
+
+### 7.3 Root Cause Summary
+
+Two compounding problems caused the CPU-only execution:
+
+| # | Problem | Evidence | Impact |
+|---|---------|----------|--------|
+| 1 | PyTorch installed as CPU-only wheel (`2.10.0+cpu`) | `torch.version.cuda = None` | PyTorch cannot see GPU at all |
+| 2 | NVIDIA driver 462.62 too old for modern CUDA (max CUDA 11.2) | `nvidia-smi` output | Even a CUDA-built PyTorch would fail without the driver update |
+
+The CPU-only wheel was likely installed because `pip install torch` (without specifying an index URL) defaults to the CPU-only build on Windows when the install environment is not recognised as a CUDA environment.
+
+### 7.4 Fix Procedure
+
+**Step 1 — Update NVIDIA Driver**
+
+The current driver (462.62, released 2021) must be updated to support CUDA 12.x.
+
+1. Navigate to: `https://www.nvidia.com/Download/index.aspx`
+2. Select: Product Type = Notebooks, Series = GeForce RTX 30 Series (Notebooks), Product = GeForce RTX 3050 Laptop GPU, OS = Windows 11 64-bit, Download Type = Game Ready Driver
+3. Download and run the installer
+4. Reboot the system
+5. Verify: `nvidia-smi` should now show Driver ≥ 550.x and CUDA Version: 12.x
+
+**Step 2 — Reinstall PyTorch with CUDA 12.1 support**
+
+```bash
+# Remove CPU-only build
+pip uninstall torch torchvision torchaudio -y
+
+# Install CUDA 12.1 build (compatible with driver ≥ 527.41 on Windows)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+**Step 3 — Verify**
+
+```python
+import torch
+print(torch.__version__)              # Should be: 2.x.x+cu121
+print(torch.cuda.is_available())      # Should be: True
+print(torch.cuda.get_device_name(0))  # Should be: NVIDIA GeForce RTX 3050 Laptop GPU
+```
+
+**Step 4 — Fix `pin_memory` in Notebook 04**
+
+The DataLoader had `pin_memory=True` hardcoded. This generates a warning on CPU and should be conditional:
+
+```python
+# Before (hardcoded, generates warning on CPU):
+train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, pin_memory=True)
+
+# After (conditional, correct on both CPU and CUDA):
+PIN = DEVICE.type == 'cuda'
+train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, pin_memory=PIN)
+```
+
+This fix has been applied to cell `89917262` in Notebook 04.
+
+### 7.5 Expected Impact of GPU Training
+
+Once the environment is fixed and Notebook 04 is re-run, the expected outcomes are:
+
+| Metric | CPU run (failed) | GPU run (expected) |
+|--------|:----------------:|:------------------:|
+| Training time per epoch | ~45 min | ~3–5 min |
+| Mixed precision (FP16) | No (auto-disabled) | Yes (auto-enabled) |
+| Val macro-F1 after epoch 1 | 0.1316 (random) | 0.70–0.85 |
+| Val macro-F1 at convergence | 0.1316 (no progress) | 0.88–0.96 |
+| Mode collapse | Yes (all → "Service") | No |
+
+The 4 GB VRAM of the RTX 3050 Laptop GPU is sufficient for this workload. With `batch_size=16`, `max_length=128`, and FP16 enabled, peak VRAM usage is estimated at approximately 2.5–3.5 GB:
+- Model weights in FP16: ~326 MB
+- Gradients (FP16): ~326 MB
+- AdamW optimizer states (FP32 master copy): ~652 MB
+- Batch activations (bs=16, seq=128, hidden=768, 24 layers, FP16): ~300–500 MB
+- Total estimate: **~1.6–1.8 GB**, well within the 4 GB budget
+
+If VRAM errors occur during training (unlikely but possible with the full 7,000-sample dataset), reduce `BATCH_SIZE` from 16 to 8 and increase `ACCUM_STEPS` from 2 to 4 to maintain the same effective batch size of 32.
+
+### 7.6 Lesson: Reproducible Environment Setup
+
+This failure highlights the importance of specifying the exact PyTorch wheel in the project's setup instructions. The `requirements.txt` currently lists `torch` without a CUDA version constraint, which silently installs the CPU-only build on many systems.
+
+**Recommended fix to `requirements.txt`**: Replace the bare `torch` entry with a comment pointing to the correct install command:
+
+```
+# PyTorch: install separately with CUDA support. Do NOT use pip install torch directly.
+# After updating NVIDIA driver to ≥550, run:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# Verify: python -c "import torch; print(torch.cuda.is_available())"
+```
+
+This is documented as ADR-005 in CLAUDE.md.

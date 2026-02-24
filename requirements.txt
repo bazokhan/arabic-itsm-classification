@@ -2,7 +2,16 @@
 # Python 3.10+
 
 # Core ML
-torch>=2.1.0
+# ⚠️  WARNING: Do NOT install torch with bare `pip install torch`.
+#    That installs the CPU-only wheel (torch+cpu) which silently disables GPU.
+#    Install PyTorch separately FIRST with the correct CUDA index URL:
+#
+#    Step 1: Update NVIDIA driver to ≥550 from https://www.nvidia.com/Download/
+#    Step 2: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#    Step 3: Verify: python -c "import torch; assert torch.cuda.is_available()"
+#
+#    See ADR-005 in CLAUDE.md and docs/experiment_analysis.md §7 for full context.
+# torch>=2.1.0   ← intentionally commented out; install via CUDA wheel above
 transformers>=4.38.0
 datasets>=2.18.0
 accelerate>=0.27.0

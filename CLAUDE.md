@@ -40,8 +40,8 @@ It will serve as a primary source for the university post-project documentation 
 | Dialect           | Egyptian Arabic (عامية مصرية) with EN code-mixing       |
 | Generation        | LLM-generated (Gemini), validated programmatically      |
 | L1 categories     | 6 (Access, Network, Hardware, Software, Security, Service) |
-| L2 categories     | 16 (documented as 14 — 2 extra found in Notebook 02)    |
-| L3 categories     | 48 (documented as 31 — 17 extra found in Notebook 02)   |
+| L2 categories     | 16                                                     |
+| L3 categories     | 48                                                     |
 | Labels            | category_level_1/2/3, priority (1-5), sentiment        |
 | Format            | CSV + JSONL                                             |
 
@@ -59,8 +59,8 @@ It will serve as a primary source for the university post-project documentation 
 
 ### ADR-002 — Classification Strategy: Multi-Head, Start with L1
 - **Date**: February 2026
-- **Decision**: Train separate classification heads for L1 (6 classes), L2 (14 classes), and priority (5 classes). Prioritize L1 in initial experiments; cascade to L2/L3 once L1 is stable.
-- **Rationale**: Multi-label as flat multiclass is too sparse at L3 (31 classes × 10k = ~322/class). Hierarchical approach follows ITSM routing logic.
+- **Decision**: Train separate classification heads for L1 (6 classes), L2 (16 classes), L3 (48 classes), and priority (5 classes). Prioritize L1 first, then extend using the same pipeline structure.
+- **Rationale**: Flat multiclass gets sparse at deeper levels after deduplication. Hierarchical modeling mirrors ITSM routing logic and keeps interpretation clean.
 - **Status**: Accepted
 
 ### ADR-003 — Framework: HuggingFace Transformers + PyTorch
@@ -88,6 +88,22 @@ It will serve as a primary source for the university post-project documentation 
 - **Decision**: Do not use bare `pip install torch`. Always install via the PyTorch CUDA index URL: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
 - **Rationale**: Bare `pip install torch` on Windows silently installs the CPU-only wheel (`torch 2.x+cpu`). This caused a complete training failure in EXP-002 — `torch.cuda.is_available()` returned `False` despite a functional RTX 3050 GPU being present. The error is silent and the model trains for hours on CPU before the failure is detectable.
 - **Consequences**: `requirements.txt` now contains a comment block instead of a bare `torch` entry. All new environment setups must follow the two-step procedure: (1) update NVIDIA driver ≥550, (2) install CUDA wheel.
+- **Status**: Accepted
+
+### ADR-007 — Storage-Aware Model Retention Policy
+- **Date**: February 2026
+- **Decision**: Keep only academically significant checkpoints, not every run. Always preserve at least:
+  - last failed diagnostic model (if it explains a major issue),
+  - best validated checkpoint per experiment stage,
+  - final deployment candidate.
+- **Rationale**: Balances reproducibility and thesis traceability with limited local storage on personal hardware.
+- **Operational rule**: Compress/archive older intermediate checkpoints and keep metrics/config snapshots even when raw weights are removed.
+- **Status**: Accepted
+
+### ADR-008 — Statistical Significance Is Required for Final Claims
+- **Date**: February 2026
+- **Decision**: Add a dedicated statistical testing stage (bootstrap confidence intervals + McNemar test) before asserting superiority over best baseline.
+- **Rationale**: Run-002 improvements are real but moderate; significance and uncertainty must be reported academically.
 - **Status**: Accepted
 
 ---
@@ -191,3 +207,12 @@ It will serve as a primary source for the university post-project documentation 
 | 2026-02-24 | GPU investigation: diagnosed `torch 2.10.0+cpu` CPU-only wheel + NVIDIA driver 462.62 (too old for CUDA 12.x). Documented fix path in `docs/analysis_run_001.md` and CLAUDE.md Known Issues. ADR-006 added. Notebook 04 pin_memory logic fixed. |
 | 2026-02-24 | Dataset quality review: 451 duplicates confirmed as data leakage risk — dedup applied in Notebook 02 preprocessing (not at source). L2/L3 class count discrepancy investigated — data is correct, README documentation was wrong. ADR-005 documents the decision. |
 | 2026-02-24 | Run-1 analysis archived to `docs/analysis_run_001.md`. Full post-fix GPU rerun completed (EXP-003): best val macro-F1=0.8938, test macro-F1=0.8910, test accuracy=0.8904, latency=9.2ms/sample. Comprehensive report added as `docs/analysis_run_002.md`. |
+| 2026-02-24 | Consistency update: fixed remaining stale taxonomy/result placeholders in README and notebooks (01/03/04/05). Added ADR-007 (storage-aware model retention) and ADR-008 (significance-testing requirement). |
+| 2026-02-24 | Refactored Notebooks 03/05 to export test predictions as `.npy` artifacts for significance testing. |
+| 2026-02-24 | Created Notebook 06: Statistical Significance — paired comparison of Baseline vs. MarBERTv2 using McNemar and Bootstrap tests. |
+| 2026-02-24 | Updated Notebook 02 to include L3 label encoding. Refactored roadmap to follow a stepwise expansion: L1 -> L2 -> L3 -> Full Multi-task. |
+| 2026-02-24 | Created Notebook 07: L2 Classification — transitions from 6 to 16 classes using joint L1+L2 training. Includes confusion matrix and performance analysis for intermediate taxonomy. |
+| 2026-02-24 | Created Notebook 08: L3 Classification — transitions to the full 48-class taxonomy level. Includes hierarchy performance decay analysis and granular L3 metrics. |
+| 2026-02-24 | Created Notebook 09: Final Multi-Task Model — integrated all 5 tasks (L1, L2, L3, Priority, Sentiment) into a single production-grade MarBERTv2 architecture. |
+| 2026-02-24 | Fixed pandas `FutureWarning` in Notebook 05 by using `np.nan` and aligning dtypes before concatenation. |
+| 2026-02-24 | Installed `statsmodels` for statistical testing in Notebook 06 and updated `requirements.txt`. |

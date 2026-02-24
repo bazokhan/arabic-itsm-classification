@@ -9,8 +9,9 @@ Requirements (installed automatically if missing):
 
 Usage:
     python scripts/export_notebooks_pdf.py
-    python scripts/export_notebooks_pdf.py --html   # fallback: HTML only
-    python scripts/export_notebooks_pdf.py --no-merge  # individual PDFs only
+    python scripts/export_notebooks_pdf.py --html-only   # HTML only
+    python scripts/export_notebooks_pdf.py --webpdf-first  # try nbconvert webpdf first
+    python scripts/export_notebooks_pdf.py --merge-only  # merge existing PDFs only
 """
 
 import argparse
@@ -46,8 +47,16 @@ def run(cmd: list[str], desc: str) -> bool:
     return True
 
 
+def can_import(module_name: str) -> bool:
+    try:
+        __import__(module_name)
+        return True
+    except Exception:
+        return False
+
+
 def ensure_packages():
-    """Install webpdf extra and pypdf if not present."""
+    """Install webpdf dependencies and pypdf if not present."""
     try:
         import nbconvert  # noqa: F401
         from nbconvert.exporters import WebPDFExporter  # noqa: F401
@@ -55,15 +64,43 @@ def ensure_packages():
         run([sys.executable, "-m", "pip", "install", "nbconvert[webpdf]"],
             "Installing nbconvert[webpdf]")
 
+    # nbconvert[webpdf] usually pulls playwright, but not always in all envs.
+    playwright_ok = True
     try:
-        import pypdf  # noqa: F401
+        import playwright  # noqa: F401
     except ImportError:
-        run([sys.executable, "-m", "pip", "install", "pypdf"],
-            "Installing pypdf")
+        playwright_ok = run(
+            [sys.executable, "-m", "pip", "install", "playwright"],
+            "Installing playwright Python package",
+        )
+        if playwright_ok:
+            try:
+                import playwright  # noqa: F401
+            except ImportError:
+                playwright_ok = False
+
+    pypdf_ok = can_import("pypdf")
+    pypdf2_ok = can_import("PyPDF2")
+    if not (pypdf_ok or pypdf2_ok):
+        installed = run([sys.executable, "-m", "pip", "install", "pypdf"],
+                        "Installing pypdf")
+        if not installed:
+            # Fallback for environments where pypdf is unavailable but PyPDF2 is.
+            run([sys.executable, "-m", "pip", "install", "PyPDF2"],
+                "Installing PyPDF2 fallback")
+        pypdf_ok = can_import("pypdf")
+        pypdf2_ok = can_import("PyPDF2")
+        if not (pypdf_ok or pypdf2_ok):
+            print("\n[!] Could not import pypdf/PyPDF2 after install attempt. Merge may be skipped.")
 
     # Install Chromium for playwright (idempotent)
-    run([sys.executable, "-m", "playwright", "install", "chromium"],
-        "Installing Playwright Chromium (may take a minute on first run)")
+    if playwright_ok:
+        run([sys.executable, "-m", "playwright", "install", "chromium"],
+            "Installing Playwright Chromium (may take a minute on first run)")
+    else:
+        print("\n[!] Playwright unavailable. PDF web export may fail; HTML fallback remains available.")
+
+    return playwright_ok
 
 
 def export_webpdf(nb_path: Path) -> Path | None:
@@ -76,7 +113,7 @@ def export_webpdf(nb_path: Path) -> Path | None:
             "--no-input",  # hide code cells — remove this line to keep code
             str(nb_path),
         ],
-        f"Converting {nb_path.name} → PDF",
+        f"Converting {nb_path.name} -> PDF",
     )
     return out_path if (ok and out_path.exists()) else None
 
@@ -90,26 +127,75 @@ def export_html(nb_path: Path) -> Path:
             "--output-dir", str(OUT_DIR),
             str(nb_path),
         ],
-        f"Converting {nb_path.name} → HTML",
+        f"Converting {nb_path.name} -> HTML",
     )
     return out_path
 
 
-def merge_pdfs(pdf_paths: list[Path], out: Path):
-    try:
-        from pypdf import PdfMerger
-    except ImportError:
-        print("\n[!] pypdf not available — skipping merge. Install with: pip install pypdf")
-        return
+def html_to_pdf_with_playwright(html_path: Path, pdf_path: Path) -> bool:
+    """Render HTML to PDF using Playwright if webpdf export fails."""
+    script = (
+        "from pathlib import Path\n"
+        "from playwright.sync_api import sync_playwright\n"
+        f"html = Path(r'''{html_path}''').resolve().as_uri()\n"
+        f"out = Path(r'''{pdf_path}''')\n"
+        "with sync_playwright() as p:\n"
+        "    browser = p.chromium.launch()\n"
+        "    page = browser.new_page()\n"
+        "    page.goto(html, wait_until='networkidle')\n"
+        "    page.pdf(path=str(out), format='A4', print_background=True)\n"
+        "    browser.close()\n"
+    )
+    return run([sys.executable, "-c", script], f"Rendering {html_path.name} -> {pdf_path.name} via Playwright")
 
-    merger = PdfMerger()
+
+def merge_pdfs(pdf_paths: list[Path], out: Path):
+    # New pypdf versions (e.g., 6.x) use PdfWriter/PdfReader and no PdfMerger.
+    try:
+        from pypdf import PdfWriter, PdfReader  # type: ignore
+        writer = PdfWriter()
+        added = 0
+        for p in pdf_paths:
+            if p and p.exists():
+                reader = PdfReader(str(p))
+                for page in reader.pages:
+                    writer.add_page(page)
+                added += 1
+                print(f"    + {p.name}")
+            else:
+                print(f"    - MISSING {p}")
+        if added == 0:
+            print("\n[!] No valid PDFs to merge.")
+            return
+        with open(out, "wb") as f:
+            writer.write(f)
+        print(f"\n[+] Merged PDF saved: {out}")
+        return
+    except Exception:
+        pass
+
+    # Legacy fallback path (older PyPDF2)
+    try:
+        from PyPDF2 import PdfMerger as LegacyMerger  # type: ignore
+    except Exception:
+        try:
+            from PyPDF2 import PdfFileMerger as LegacyMerger  # type: ignore
+        except Exception:
+            print("\n[!] pypdf/PyPDF2 merge backend unavailable — skipping merge.")
+            return
+
+    merger = LegacyMerger()
+    added = 0
     for p in pdf_paths:
         if p and p.exists():
             merger.append(str(p))
+            added += 1
             print(f"    + {p.name}")
         else:
             print(f"    - MISSING {p}")
-
+    if added == 0:
+        print("\n[!] No valid PDFs to merge.")
+        return
     with open(out, "wb") as f:
         merger.write(f)
     print(f"\n[+] Merged PDF saved: {out}")
@@ -118,8 +204,12 @@ def merge_pdfs(pdf_paths: list[Path], out: Path):
 # ── Main ─────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description="Export notebooks to PDF/HTML")
-    parser.add_argument("--html", action="store_true",
-                        help="Export to HTML only (no Chromium needed)")
+    parser.add_argument("--html-only", action="store_true",
+                        help="Export to HTML only (no PDF rendering)")
+    parser.add_argument("--webpdf-first", action="store_true",
+                        help="Try nbconvert webpdf first; fallback to HTML->Playwright PDF")
+    parser.add_argument("--merge-only", action="store_true",
+                        help="Merge existing notebook PDFs in output directory and exit")
     parser.add_argument("--no-merge", action="store_true",
                         help="Skip merging individual PDFs into one")
     parser.add_argument("--with-code", action="store_true",
@@ -131,9 +221,15 @@ def main():
     print(f"Output directory: {OUT_DIR}")
     print("=" * 60)
 
-    if args.html:
+    if args.merge_only:
+        existing = [OUT_DIR / f"{Path(n).stem}.pdf" for n in NOTEBOOKS]
+        merge_pdfs(existing, MERGED_PDF)
+        print("\nDone.")
+        return
+
+    if args.html_only:
         # ── HTML fallback ───────────────────────────────────────────────────
-        print("\nMode: HTML export (open in browser → Ctrl+P → Save as PDF)")
+        print("\nMode: HTML export (open in browser -> Ctrl+P -> Save as PDF)")
         for nb_name in NOTEBOOKS:
             nb_path = NB_DIR / nb_name
             if nb_path.exists():
@@ -141,11 +237,11 @@ def main():
             else:
                 print(f"  [!] Not found: {nb_path}")
         print(f"\nHTML files written to: {OUT_DIR}")
-        print("To print: open each .html in Chrome/Edge → Ctrl+P → Destination: Save as PDF")
+        print("To print: open each .html in Chrome/Edge -> Ctrl+P -> Destination: Save as PDF")
         return
 
     # ── PDF via webpdf ──────────────────────────────────────────────────────
-    ensure_packages()
+    playwright_available = ensure_packages()
 
     pdf_paths = []
     for nb_name in NOTEBOOKS:
@@ -153,7 +249,15 @@ def main():
         if not nb_path.exists():
             print(f"  [!] Not found, skipping: {nb_path}")
             continue
-        pdf_path = export_webpdf(nb_path)
+        pdf_path = None
+        if args.webpdf_first:
+            pdf_path = export_webpdf(nb_path)
+        if pdf_path is None:
+            html_path = export_html(nb_path)
+            if playwright_available:
+                fallback_pdf = OUT_DIR / nb_path.with_suffix(".pdf").name
+                if html_path.exists() and html_to_pdf_with_playwright(html_path, fallback_pdf) and fallback_pdf.exists():
+                    pdf_path = fallback_pdf
         pdf_paths.append(pdf_path)
 
     if not args.no_merge:

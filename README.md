@@ -14,7 +14,7 @@ This repository contains the model training pipeline for a cloud-based Arabic IT
 **Key properties:**
 - **Language**: Egyptian Arabic (عامية مصرية) with English code-mixing (e.g., VPN، Outlook، MFA)
 - **Model**: [MarBERTv2](https://huggingface.co/UBC-NLP/MARBERTv2) — the strongest publicly available encoder for Egyptian dialect NLP
-- **Tasks**: Multi-class classification for L1 category (6 classes), L2 sub-category (14 classes), and priority (1–5)
+- **Tasks**: Multi-class classification for L1 category (6 classes), L2 sub-category (16 classes), and priority (1–5)
 - **Dataset**: [arabic-itsm-dataset](https://github.com/bazokhan/arabic-itsm-dataset) — 10,000 synthetic Egyptian Arabic ITSM tickets with a 3-level taxonomy
 
 ---
@@ -28,7 +28,7 @@ The training data lives in a companion repository:
 | **Repo** | [`bazokhan/arabic-itsm-dataset`](https://github.com/bazokhan/arabic-itsm-dataset) |
 | **HuggingFace** | [`albaz2000/arabic-itsm-dataset`](https://huggingface.co/datasets/albaz2000/arabic-itsm-dataset) |
 | **Size** | 10,000 tickets (CSV + JSONL) |
-| **Taxonomy** | 6 L1 → 14 L2 → 31 L3 categories |
+| **Taxonomy** | 6 L1 → 16 L2 → 48 L3 categories |
 | **Labels** | category_level_1/2/3, priority (1–5), sentiment |
 | **Dialect** | Egyptian Arabic with English technical terms |
 
@@ -49,7 +49,7 @@ Input: Arabic ticket (title_ar + description_ar)
 MarBERTv2 Encoder  (163M parameters, UBC-NLP/MARBERTv2)
     ↓  [CLS] representation (768-dim)
     ├── Dropout(0.1) → Linear(768→6)   → L1 category   (6 classes)
-    ├── Dropout(0.1) → Linear(768→14)  → L2 sub-category (14 classes)
+    ├── Dropout(0.1) → Linear(768→16)  → L2 sub-category (16 classes)
     └── Dropout(0.1) → Linear(768→5)   → Priority        (1–5)
 ```
 
@@ -181,10 +181,10 @@ All runs are logged to `mlruns/` (gitignored). Key metrics per epoch:
 
 | Model | Test Accuracy | Test Macro-F1 | Infer (ms/sample) |
 |-------|:------------:|:-------------:|:-----------------:|
-| Naive Bayes (TF-IDF) | — | — | — |
-| Logistic Regression (TF-IDF) | — | — | — |
-| LinearSVC (TF-IDF) | — | — | — |
-| **MarBERTv2 (fine-tuned)** | — | — | — |
+| Naive Bayes (TF-IDF) | 85.55% | 85.26% | 0.04 |
+| Logistic Regression (TF-IDF) | 87.79% | 87.48% | 0.24 |
+| LinearSVC (TF-IDF) | 88.70% | 88.40% | 0.23 |
+| **MarBERTv2 (fine-tuned)** | **89.04%** | **89.10%** | **9.20** |
 
 ---
 

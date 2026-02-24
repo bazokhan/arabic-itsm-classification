@@ -25,6 +25,7 @@ pyarabic>=0.6.15        # Arabic text utilities (diacritics, normalization)
 pandas>=2.1.0
 numpy>=1.26.0
 scikit-learn>=1.4.0
+statsmodels>=0.14.0
 
 # Visualization
 matplotlib>=3.8.0

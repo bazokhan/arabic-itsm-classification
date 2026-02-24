@@ -18,8 +18,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 def parse_args():
     p = argparse.ArgumentParser(description="Fine-tune MarBERTv2 on Arabic ITSM tickets")
-    p.add_argument("--task", default="l1", choices=["l1", "l2", "priority"],
-                   help="Classification task (default: l1)")
+    p.add_argument("--task", default="l1", choices=["l1", "l2", "l3", "priority", "sentiment"],
+                   help="Classification task (ignored if --multi-task is set)")
+    p.add_argument("--multi-task", action="store_true",
+                   help="Train all 5 tasks (L1, L2, L3, Priority, Sentiment) jointly")
     p.add_argument("--model", default="UBC-NLP/MARBERTv2",
                    help="HuggingFace model ID")
     p.add_argument("--data-dir", default="data/processed",
@@ -65,7 +67,10 @@ def main():
     print(f"Device: {device} | FP16: {use_fp16}")
 
     data_dir = Path(args.data_dir)
-    out_dir = Path(args.output_dir) / f"marbert_{args.task}_best"
+    tasks = ["l1", "l2", "l3", "priority", "sentiment"] if args.multi_task else [args.task]
+    task_label = "multi_task" if args.multi_task else args.task
+    
+    out_dir = Path(args.output_dir) / f"marbert_{task_label}_best"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     train_df = pd.read_csv(data_dir / "train.csv")
@@ -74,30 +79,30 @@ def main():
     with open(data_dir / "label_encoders.pkl", "rb") as f:
         label_encoders = pickle.load(f)
 
-    num_classes = len(label_encoders[args.task].classes_)
-    print(f"Task: {args.task} | Classes: {num_classes}")
+    # Filter encoders for active tasks
+    active_encoders = {t: label_encoders[t] for t in tasks}
+    num_classes = {t: len(le.classes_) for t, le in active_encoders.items()}
+    print(f"Tasks: {tasks} | Classes: {num_classes}")
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     normalizer = ArabicTextNormalizer()
 
-    train_ds = ITSMDataset(train_df, tokenizer, normalizer,
-                           {args.task: label_encoders[args.task]},
-                           args.max_length, tasks=[args.task])
-    val_ds = ITSMDataset(val_df, tokenizer, normalizer,
-                         {args.task: label_encoders[args.task]},
-                         args.max_length, tasks=[args.task])
+    train_ds = ITSMDataset(train_df, tokenizer, normalizer, active_encoders,
+                           args.max_length, tasks=tasks)
+    val_ds = ITSMDataset(val_df, tokenizer, normalizer, active_encoders,
+                         args.max_length, tasks=tasks)
 
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch_size * 2, shuffle=False)
 
-    model = MarBERTClassifier(args.model, {args.task: num_classes}).to(device)
+    model = MarBERTClassifier(args.model, num_classes).to(device)
 
     optimizer = AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     total_steps = len(train_loader) * args.epochs
     scheduler = get_linear_schedule_with_warmup(
         optimizer, int(0.06 * total_steps), total_steps
     )
-    scaler = torch.cuda.amp.GradScaler(enabled=use_fp16)
+    scaler = torch.amp.GradScaler('cuda', enabled=use_fp16)
 
     best_f1 = 0.0
     mlflow.set_experiment("arabic-itsm-marbert")
@@ -110,10 +115,10 @@ def main():
             for batch in tqdm(train_loader, desc=f"Epoch {epoch}"):
                 ids = batch["input_ids"].to(device)
                 mask = batch["attention_mask"].to(device)
-                labels = batch[f"label_{args.task}"].to(device)
+                labels = {f"label_{t}": batch[f"label_{t}"].to(device) for t in tasks}
 
-                with torch.cuda.amp.autocast(enabled=use_fp16):
-                    out = model(ids, mask, **{f"label_{args.task}": labels})
+                with torch.amp.autocast('cuda', enabled=use_fp16):
+                    out = model(ids, mask, **labels)
                     loss = out["loss"]
 
                 scaler.scale(loss).backward()
@@ -126,28 +131,43 @@ def main():
 
             # Validation
             model.eval()
-            all_preds, all_labels = [], []
+            all_preds = {t: [] for t in tasks}
+            all_labels = {t: [] for t in tasks}
             with torch.no_grad():
                 for batch in val_loader:
                     ids = batch["input_ids"].to(device)
                     mask = batch["attention_mask"].to(device)
                     out = model(ids, mask)
-                    preds = torch.argmax(out[f"logits_{args.task}"], dim=-1)
-                    all_preds.extend(preds.cpu().numpy())
-                    all_labels.extend(batch[f"label_{args.task}"].numpy())
+                    for t in tasks:
+                        preds = torch.argmax(out[f"logits_{t}"], dim=-1)
+                        all_preds[t].extend(preds.cpu().numpy())
+                        all_labels[t].extend(batch[f"label_{t}"].numpy())
 
-            metrics = compute_classification_metrics(all_labels, all_preds)
-            print(f"Epoch {epoch} | val_macro_f1={metrics['macro_f1']:.4f}")
+            # Compute Metrics
+            metrics = {}
+            f1_scores = []
+            for t in tasks:
+                m = compute_classification_metrics(all_labels[t], all_preds[t])
+                metrics[f"{t}_macro_f1"] = m["macro_f1"]
+                f1_scores.append(m["macro_f1"])
+            
+            avg_f1 = np.mean(f1_scores)
+            metrics["avg_macro_f1"] = avg_f1
+            
+            print(f"Epoch {epoch} | avg_f1={avg_f1:.4f}")
+            for t in tasks:
+                print(f"  {t:<10}: {metrics[f'{t}_macro_f1']:.4f}")
+                
             mlflow.log_metrics(metrics, step=epoch)
 
-            if metrics["macro_f1"] > best_f1:
-                best_f1 = metrics["macro_f1"]
+            if avg_f1 > best_f1:
+                best_f1 = avg_f1
                 model.encoder.save_pretrained(str(out_dir))
                 tokenizer.save_pretrained(str(out_dir))
                 torch.save(model.heads.state_dict(), out_dir / "heads.pt")
-                print(f"  ✓ Checkpoint saved (f1={best_f1:.4f})")
+                print(f"  ✓ Checkpoint saved (avg_f1={best_f1:.4f})")
 
-    print(f"\nDone. Best val macro-F1: {best_f1:.4f}")
+    print(f"\nDone. Best val avg macro-F1: {best_f1:.4f}")
     print(f"Checkpoint: {out_dir}")
 
 

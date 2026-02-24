@@ -216,3 +216,5 @@ It will serve as a primary source for the university post-project documentation 
 | 2026-02-24 | Created Notebook 09: Final Multi-Task Model — integrated all 5 tasks (L1, L2, L3, Priority, Sentiment) into a single production-grade MarBERTv2 architecture. |
 | 2026-02-24 | Fixed pandas `FutureWarning` in Notebook 05 by using `np.nan` and aligning dtypes before concatenation. |
 | 2026-02-24 | Installed `statsmodels` for statistical testing in Notebook 06 and updated `requirements.txt`. |
+| 2026-02-24 | Developed `src/arabic_itsm/inference.py`: a production-ready engine for unified L1/L2/L3/Multi-task inference. |
+| 2026-02-24 | Added `docs/cloud_training_guide.md`: a comprehensive guide for training compute-intensive models on Google Colab/Kaggle. |

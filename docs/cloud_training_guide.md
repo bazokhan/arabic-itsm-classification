@@ -44,39 +44,81 @@ Do not upload the entire raw dataset. Only upload the processed artifacts to min
 ### Phase B: Cloud Environment Setup
 Open a new notebook on [Kaggle](https://www.kaggle.com/) or [Google Colab](https://colab.research.google.com/). 
 
-**1. System Initialization**
+**1. Hardware Acceleration (Critical)**
+By default, cloud notebooks use the CPU. You must manually attach a GPU to avoid 10+ hour training times.
+
+- **Kaggle**: 
+  1. Open the right-hand sidebar settings (click the `|>` icon or "Settings").
+  2. Locate the **"Accelerator"** dropdown.
+  3. Select **"GPU T4 x2"** (standard for multi-tasking) or **"GPU P100"**.
+  4. Confirm the session restart.
+- **Google Colab**:
+  1. Navigate to **Edit** -> **Notebook settings**.
+  2. Under "Hardware accelerator", select **"T4 GPU"** (or A100 if on Colab Pro).
+  3. Click **Save**.
+
+**2. System Initialization**
 Run these commands in a notebook cell (prepended with `!`) to clone the repository and install the environment:
 ```bash
 # Clone the repository
 !git clone https://github.com/bazokhan/arabic-itsm-classification.git
 %cd arabic-itsm-classification
 
-# Install dependencies (ignoring torch to avoid overriding the cloud's optimized CUDA build)
+# Install dependencies
+# Note: We skip installing 'torch' to use the cloud's pre-installed, GPU-optimized version.
 !pip install transformers datasets accelerate evaluate arabert pyarabic statsmodels mlflow tqdm pyyaml
 ```
 
-**2. Data Upload**
+**3. Data Upload**
 - **Colab**: Click the folder icon on the left sidebar and drag `processed_data.zip` into the pane.
 - **Kaggle**: Use the "Add Data" button on the right sidebar to upload the zip as a private dataset.
 
-**3. Artifact Extraction & Path Mapping**
+**4. Artifact Extraction & Path Mapping**
 - **Colab**:
   ```bash
   !mkdir -p data/processed
   !unzip ../processed_data.zip -d data/processed/
   ```
 - **Kaggle**: 
-  Kaggle automatically unzips datasets into `/kaggle/input/`. Since our script expects data in `data/processed/`, we must create a symbolic link or override the path:
+  Kaggle unzips datasets into a nested structure. Based on your verification, your exact data path is:
+  `/kaggle/input/datasets/mohamedalbaz/processed-data`
+
+  **1. Map the data**:
+  Run these exact commands to link the Kaggle input to the project's expected data directory:
   ```bash
-  # Create the internal data structure
-  !mkdir -p data/processed
+  # Clear existing placeholder created by git
+  !rm -rf data/processed && mkdir -p data/processed
   
-  # Link the Kaggle dataset files to the expected local directory
-  # (Update the path below to match your exact Kaggle dataset name)
-  !ln -s /kaggle/input/processed-data/* data/processed/
+  # Link using the EXACT path confirmed via ls -R
+  !cp -rs /kaggle/input/datasets/mohamedalbaz/processed-data/* data/processed/
   ```
 
-### Phase C: Executing the Training Script
+  **2. Verify mapping**:
+  ```bash
+  !ls data/processed
+  # Expected output: label_encoders.pkl, test.csv, train.csv, val.csv
+  ```
+
+---
+
+## 4. Common Warnings & Troubleshooting
+
+### A. "Device: cpu | FP16: False"
+If you see this in the first line of the training output, the script is **not using the GPU**.
+- **Fix**: Re-check Phase B, Step 1 (Hardware Acceleration). 
+- **Verification**: Run `!nvidia-smi` in a cell. If it returns "command not found" or an error, the GPU is not attached.
+
+### B. "InconsistentVersionWarning: Trying to unpickle LabelEncoder..."
+You may see a warning about `scikit-learn` versions (e.g., 1.8.0 vs 1.6.1).
+- **Explanation**: This occurs when the `label_encoders.pkl` was created on a local machine with a different version of scikit-learn than the cloud environment.
+- **Action**: **Safe to ignore.** For simple `LabelEncoder` objects, this version mismatch does not affect prediction accuracy.
+
+### C. "Warning: You are sending unauthenticated requests to the HF Hub"
+- **Action**: **Safe to ignore.** MarBERTv2 is a public model; an API token is not required for download.
+
+---
+
+## 5. Executing the Training Script
 Instead of manual cell execution, use the provided `scripts/train.py` for a robust, CLI-driven experience.
 
 **To train the Level 3 (48 classes) model on Kaggle:**

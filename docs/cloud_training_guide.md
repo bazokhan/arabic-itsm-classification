@@ -59,24 +59,38 @@ Run these commands in a notebook cell (prepended with `!`) to clone the reposito
 - **Colab**: Click the folder icon on the left sidebar and drag `processed_data.zip` into the pane.
 - **Kaggle**: Use the "Add Data" button on the right sidebar to upload the zip as a private dataset.
 
-**3. Artifact Extraction**
-```bash
-!mkdir -p data/processed
-!unzip ../processed_data.zip -d data/processed/
-```
+**3. Artifact Extraction & Path Mapping**
+- **Colab**:
+  ```bash
+  !mkdir -p data/processed
+  !unzip ../processed_data.zip -d data/processed/
+  ```
+- **Kaggle**: 
+  Kaggle automatically unzips datasets into `/kaggle/input/`. Since our script expects data in `data/processed/`, we must create a symbolic link or override the path:
+  ```bash
+  # Create the internal data structure
+  !mkdir -p data/processed
+  
+  # Link the Kaggle dataset files to the expected local directory
+  # (Update the path below to match your exact Kaggle dataset name)
+  !ln -s /kaggle/input/processed-data/* data/processed/
+  ```
 
 ### Phase C: Executing the Training Script
-Instead of manual cell execution, use the provided `scripts/train.py` for a robust, CLI-driven experience. This script handles MLflow logging and automatic checkpointing.
+Instead of manual cell execution, use the provided `scripts/train.py` for a robust, CLI-driven experience.
 
-**To train the Level 3 (48 classes) model:**
+**To train the Level 3 (48 classes) model on Kaggle:**
 ```bash
 !python scripts/train.py \
     --task l3 \
+    --data-dir data/processed \
     --epochs 10 \
     --lr 1e-5 \
-    --batch-size 16 \
-    --output-dir models/cloud_runs
+    --batch-size 16
 ```
+
+**Note on GPU in Cloud**:
+If you see `Device: cpu` in the output, ensure you have enabled the GPU accelerator in the notebook settings (Right sidebar -> Accelerator -> GPU T4 x2 or P100).
 
 **To train the Final Multi-Task model (L1+L2+L3+Priority+Sentiment):**
 ```bash

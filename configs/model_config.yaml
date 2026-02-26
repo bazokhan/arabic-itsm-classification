@@ -14,11 +14,11 @@ model:
       dropout: 0.1
     l2:
       enabled: true
-      num_classes: 14
+      num_classes: 16       # Confirmed from label_encoders.pkl (was wrong in README: 14)
       dropout: 0.1
     l3:
       enabled: false        # Disabled in initial runs — too sparse per class
-      num_classes: 31
+      num_classes: 48       # Confirmed from label_encoders.pkl (was wrong in README: 31)
       dropout: 0.15
     priority:
       enabled: true

@@ -48,10 +48,15 @@ Input: Arabic ticket (title_ar + description_ar)
     ↓
 MarBERTv2 Encoder  (163M parameters, UBC-NLP/MARBERTv2)
     ↓  [CLS] representation (768-dim)
-    ├── Dropout(0.1) → Linear(768→6)   → L1 category   (6 classes)
-    ├── Dropout(0.1) → Linear(768→16)  → L2 sub-category (16 classes)
-    └── Dropout(0.1) → Linear(768→5)   → Priority        (1–5)
+    ├── Dropout(0.1) → Linear(768→6)   → L1 category     (6 classes)
+    ├── Dropout(0.1) → Linear(768→16)  → L2 sub-category  (16 classes)
+    ├── Dropout(0.1) → Linear(768→48)  → L3 sub-sub-cat   (48 classes)
+    ├── Dropout(0.1) → Linear(768→5)   → Priority         (5 classes: 1–5)
+    └── Dropout(0.1) → Linear(768→4)   → Sentiment        (4 classes)
 ```
+
+**Production mode**: a single forward pass populates all 5 heads from one `marbert_multi_task_best/` checkpoint.
+**Demo mode**: milestone checkpoints (`marbert_l1_best/`, `marbert_l2_best/`, etc.) can be shown individually.
 
 **Why MarBERTv2?** See [`docs/model_recommendation.md`](docs/model_recommendation.md) and [`docs/decisions/ADR-001-model-selection.md`](docs/decisions/ADR-001-model-selection.md) for the full rationale. In brief: it outperforms CAMeLBERT and AraBERTv2 on Egyptian colloquial classification tasks (64–85% F1), has a low compute footprint (same size as BERT-base), and is available directly from HuggingFace.
 
@@ -149,10 +154,16 @@ Open and run notebooks 01 → 02 → 03 → 04 → 05 in order.
 After running Notebook 02 to generate processed splits:
 
 ```bash
-# L1 classification (6 classes)
+# Single-task: L1 only (local GPU, fast)
 python scripts/train.py --task l1 --epochs 5 --lr 2e-5
 
-# With custom batch size (for CPU or limited VRAM)
+# Joint subset: L1 + L2 + L3 (recommended: Kaggle T4)
+python scripts/train.py --tasks l1 l2 l3 --epochs 10 --lr 1e-5 --batch-size 16
+
+# Full multi-task: all 5 tasks (recommended: Kaggle T4)
+python scripts/train.py --multi-task --epochs 10 --lr 1e-5 --batch-size 16
+
+# CPU / limited VRAM
 python scripts/train.py --task l1 --batch-size 8 --no-fp16
 ```
 
@@ -177,14 +188,64 @@ All runs are logged to `mlruns/` (gitignored). Key metrics per epoch:
 
 ## Results
 
-*(Fill after running experiments — see Notebook 05)*
+### L1 Classification (6 classes)
 
-| Model | Test Accuracy | Test Macro-F1 | Infer (ms/sample) |
-|-------|:------------:|:-------------:|:-----------------:|
-| Naive Bayes (TF-IDF) | 85.55% | 85.26% | 0.04 |
-| Logistic Regression (TF-IDF) | 87.79% | 87.48% | 0.24 |
-| LinearSVC (TF-IDF) | 88.70% | 88.40% | 0.23 |
-| **MarBERTv2 (fine-tuned)** | **89.04%** | **89.10%** | **9.20** |
+| Model | Test Accuracy | Test Macro-F1 | Infer (ms/sample) | Checkpoint |
+|-------|:------------:|:-------------:|:-----------------:|------------|
+| Naive Bayes (TF-IDF) | 85.55% | 85.26% | 0.04 | — |
+| Logistic Regression (TF-IDF) | 87.79% | 87.48% | 0.24 | — |
+| LinearSVC (TF-IDF) | 88.70% | 88.40% | 0.23 | — |
+| **MarBERTv2 (fine-tuned)** | **89.04%** | **89.10%** | **9.20** | `marbert_l1_best/` |
+
+### L1 + L2 Joint (6 + 16 classes)
+
+| Task | Val Macro-F1 | Checkpoint |
+|------|:------------:|------------|
+| L1 | 89.31% | `marbert_l2_best/` |
+| L2 | 86.57% | `marbert_l2_best/` |
+
+### L3 (48 classes — Kaggle T4)
+
+| Training Mode | Val Macro-F1 | Checkpoint |
+|---|:---:|---|
+| L3-only single-task | 79.24% | `marbert_l3only_kaggle/` |
+| L1+L2+L3 joint | TBD | `marbert_l1_l2_l3_best/` *(pending)* |
+
+### Full Multi-Task (all 5 tasks)
+
+| Checkpoint | Avg Macro-F1 | Status |
+|---|:---:|---|
+| `marbert_multi_task_best/` | TBD | Pending Kaggle run |
+
+---
+
+## Training Environment Split
+
+Due to local GPU VRAM constraints (RTX 3050 Laptop, 4 GB), training is split:
+
+| Task Scope | Environment | Rationale |
+|---|---|---|
+| L1 only (`--task l1`) | Local GPU | Fast, fits in 4 GB VRAM |
+| L1+L2 joint (`--tasks l1 l2`) | Local GPU | Still fits, ~3.5 GB peak |
+| L1+L2+L3 joint (`--tasks l1 l2 l3`) | Kaggle T4 | More heads → more memory; T4 has 15 GB |
+| Full multi-task (`--multi-task`) | Kaggle T4 | 5 heads require reliable GPU budget |
+
+**Kaggle notebooks** (in `notebooks/`):
+- `kaggle_train_l3_arabic_itsm_classification` — original L3-only run (EXP-004)
+- `kaggle_train_l1l2l3_arabic_itsm_classification` — joint L1+L2+L3 (Notebook 08)
+- `kaggle_train_multitask_arabic_itsm_classification` — full 5-task (Notebook 09)
+
+---
+
+## Model Registry
+
+| Checkpoint | Tasks | Heads | Environment | Status |
+|---|---|---|---|---|
+| `marbert_l1_best/` | L1 | 1 | Local GPU (RTX 3050) | Done |
+| `marbert_l2_best/` | L1+L2 | 2 | Local GPU (RTX 3050) | Done |
+| `marbert_l3only_kaggle/` | L3 only | 1 | Kaggle GPU (T4) | Done — val F1=0.79 |
+| `marbert_l1_l2_l3_best/` | L1+L2+L3 | 3 | Kaggle GPU (T4) | Pending |
+| `marbert_multi_task_best/` | All 5 | 5 | Kaggle GPU (T4) | Pending |
 
 ---
 

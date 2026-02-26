@@ -11,7 +11,7 @@ It will serve as a primary source for the university post-project documentation 
 
 - Follow repository-local instructions in `AGENTS.md` as the primary operating policy.
 - Keep experiment reporting reproducible by anchoring claims to notebook outputs and files under `results/`.
-- Archive each full pipeline analysis by run number (`analysis_run_001.md`, `analysis_run_002.md`, ...).
+- Archive each full pipeline analysis using naming: `analysis_nb<NN>_<env>_<date>.md` (env: `local_cpu`, `local_gpu`, `kaggle_gpu`).
 
 ---
 
@@ -106,6 +106,13 @@ It will serve as a primary source for the university post-project documentation 
 - **Rationale**: Run-002 improvements are real but moderate; significance and uncertainty must be reported academically.
 - **Status**: Accepted
 
+### ADR-009 — Kaggle GPU for L3+ Training (GPU Constraint Rationale)
+- **Date**: February 2026
+- **Decision**: Use Kaggle free-tier T4 GPU for all training involving L3 heads or more. Local RTX 3050 (4 GB VRAM) handles L1-only and L1+L2 joint training but is not used for L3+ due to time and reliability constraints with the larger task graph.
+- **Rationale**: Kaggle provides 2× Tesla T4 (30 GPU hrs/week), sufficient for 10-epoch L3+ runs (~13 min each). Local GPU is reserved for fast iteration (L1, L2). This split also provides a clean environment separation: local = development, Kaggle = production training.
+- **Operational rule**: Always push code changes to GitHub before running on Kaggle. Kaggle notebook clones from `main` branch.
+- **Status**: Accepted
+
 ---
 
 ## Experiment Log
@@ -116,7 +123,8 @@ It will serve as a primary source for the university post-project documentation 
 | EXP-001b | 2026-02-24 | L1 baseline | TF-IDF + LinearSVC (word+char) | — | — | — | 0.8817 | **0.8840** | 6.1s train, 0.23ms infer — best baseline |
 | EXP-001c | 2026-02-24 | L1 baseline | TF-IDF + Naive Bayes (word) | — | — | — | 0.8628 | 0.8526 | 0.3s train, 0.04ms infer |
 | EXP-002 | 2026-02-24 | L1 | MarBERTv2 | 3 (early stop) | 2e-5 | 32 | 0.1316 | 0.1236 | **FAILED** — CPU-only training (`torch+cpu` build). Mode collapsed to "Service". Archived in `docs/analysis_run_001.md` |
-| EXP-003 | 2026-02-24 | L1 | MarBERTv2 (GPU) | 4 (best at epoch 2) | 2e-5 | 32 | **0.8938** | **0.8910** | **SUCCESS** — CUDA+FP16 run. Accuracy 0.8904, infer 9.2ms/sample. Detailed analysis: `docs/analysis_run_002.md` |
+| EXP-003 | 2026-02-24 | L1 | MarBERTv2 (GPU) | 4 (best at epoch 2) | 2e-5 | 32 | **0.8938** | **0.8910** | **SUCCESS** — CUDA+FP16 run. Accuracy 0.8904, infer 9.2ms/sample. Detailed analysis: `docs/analysis_nb04_local_gpu_2026-02-24.md` |
+| EXP-004 | 2026-02-24 | L3 only | MarBERTv2 (Kaggle T4) | 10 (best at epoch 6) | 1e-5 | 16 | **0.7924** | TBD | **SUCCESS** — Kaggle single-task L3 run. 48 classes. Checkpoint: `marbert_l3only_kaggle/`. Analysis: `docs/analysis_kaggle_l3only_kaggle_gpu_2026-02-24.md` |
 
 ---
 
@@ -132,10 +140,16 @@ It will serve as a primary source for the university post-project documentation 
 - [x] Notebook 05: Evaluation run complete (on failed model — results invalid, to be rerun after GPU fix)
 - [x] Infrastructure issue diagnosed and documented: CPU-only PyTorch wheel, driver update required (ADR-005)
 - [x] NVIDIA driver updated to ≥550 + PyTorch reinstalled with CUDA 12.1 (prerequisite for EXP-003)
-- [x] Notebook 04: MarBERTv2 GPU retraining — EXP-003
+- [x] Notebook 04: MarBERTv2 GPU retraining — EXP-003 → `marbert_l1_best/`
 - [x] Notebook 05: Re-evaluation after successful GPU training
-- [ ] Notebook 04: Hyperparameter sweep complete
-- [ ] Model exported and saved to `models/`
+- [x] Notebook 06: Statistical significance testing (McNemar + Bootstrap)
+- [x] Notebook 07: L1+L2 joint training — `marbert_l2_best/` (code written + executed locally)
+- [x] Notebook 08: L1+L2+L3 joint training — code written; training pending Kaggle run → `marbert_l1_l2_l3_best/`
+- [x] Notebook 09: Full multi-task (5 tasks) — code written; training pending Kaggle run → `marbert_multi_task_best/`
+- [x] Kaggle L3-only run — EXP-004, val F1=0.7924 → `marbert_l3only_kaggle/`
+- [ ] Run `kaggle_train_l1l2l3_arabic_itsm_classification` notebook on Kaggle
+- [ ] Run `kaggle_train_multitask_arabic_itsm_classification` notebook on Kaggle
+- [ ] Fill analysis stubs after Kaggle runs complete
 - [ ] University documentation draft started
 - [ ] Web demo prototype (cloud deployment)
 
@@ -150,9 +164,25 @@ It will serve as a primary source for the university post-project documentation 
 | Taxonomy                        | https://raw.githubusercontent.com/bazokhan/arabic-itsm-dataset/master/taxonomy_itsm_v1.json |
 | Model config                    | `configs/model_config.yaml`                       |
 | Data config                     | `configs/data_config.yaml`                        |
-| Best L1 checkpoint              | `models/marbert_l1_best/`                         |
+| L1 checkpoint (1 head)          | `models/marbert_l1_best/`                         |
+| L1+L2 checkpoint (2 heads)      | `models/marbert_l2_best/`                         |
+| L3-only checkpoint (1 head)     | `models/marbert_l3only_kaggle/`                   |
+| L1+L2+L3 checkpoint (3 heads)   | `models/marbert_l1_l2_l3_best/` *(pending Kaggle)* |
+| Multi-task checkpoint (5 heads) | `models/marbert_multi_task_best/` *(pending Kaggle)* |
 | Results (metrics)               | `results/metrics/`                                |
 | Results (figures)               | `results/figures/`                                |
+
+---
+
+## Model Registry
+
+| Checkpoint | Tasks | Heads | Environment | Status |
+|---|---|---|---|---|
+| `marbert_l1_best/` | L1 | 1 | Local GPU (RTX 3050) | Done — Notebook 04, EXP-003, 89.1% F1 |
+| `marbert_l2_best/` | L1+L2 | 2 | Local GPU (RTX 3050) | Done — Notebook 07, EXP-003b, 89.31%/86.57% F1 |
+| `marbert_l3only_kaggle/` | L3 only | 1 | Kaggle GPU (T4) | Done — Kaggle NB (EXP-004), val F1=0.7924 |
+| `marbert_l1_l2_l3_best/` | L1+L2+L3 | 3 | Kaggle GPU (T4) | Pending — new Kaggle NB (Notebook 08) |
+| `marbert_multi_task_best/` | All 5 | 5 | Kaggle GPU (T4) | Pending — new Kaggle NB (Notebook 09) |
 
 ---
 
@@ -218,3 +248,4 @@ It will serve as a primary source for the university post-project documentation 
 | 2026-02-24 | Installed `statsmodels` for statistical testing in Notebook 06 and updated `requirements.txt`. |
 | 2026-02-24 | Developed `src/arabic_itsm/inference.py`: a production-ready engine for unified L1/L2/L3/Multi-task inference. |
 | 2026-02-24 | Added `docs/cloud_training_guide.md`: a comprehensive guide for training compute-intensive models on Google Colab/Kaggle. |
+| 2026-02-26 | Fixed training inconsistencies: renamed `marbert_l3_best/` → `marbert_l3only_kaggle/` (honest: L3-only from Kaggle). Added `--tasks` arg to `scripts/train.py` for joint subset training. Fixed `configs/model_config.yaml` class counts (l2: 14→16, l3: 31→48). Renamed analysis docs to semantic format. Added EXP-004 (Kaggle L3-only, val F1=0.7924). Created 2 new Kaggle notebooks for joint L1+L2+L3 and full multi-task training. Added model registry table and ADR-009 (Kaggle GPU rationale). |

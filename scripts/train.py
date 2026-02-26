@@ -3,10 +3,17 @@ CLI training script for Arabic ITSM classification.
 
 Usage:
     python scripts/train.py --task l1 --epochs 5 --lr 2e-5
+    python scripts/train.py --tasks l1 l2 l3 --epochs 10 --lr 1e-5
+    python scripts/train.py --multi-task --epochs 10 --lr 1e-5
     python scripts/train.py --task l1 --config configs/model_config.yaml
 
 This script wraps the logic in Notebook 04 into a reusable CLI suitable
 for running on cloud compute (Colab, Kaggle, cloud VM) or locally.
+
+Output directory naming:
+    --task l3             → models/marbert_l3_best/
+    --tasks l1 l2 l3      → models/marbert_l1_l2_l3_best/
+    --multi-task          → models/marbert_multi_task_best/
 """
 
 import argparse
@@ -19,7 +26,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 def parse_args():
     p = argparse.ArgumentParser(description="Fine-tune MarBERTv2 on Arabic ITSM tickets")
     p.add_argument("--task", default="l1", choices=["l1", "l2", "l3", "priority", "sentiment"],
-                   help="Classification task (ignored if --multi-task is set)")
+                   help="Single-task mode (ignored if --multi-task or --tasks is set)")
+    p.add_argument("--tasks", nargs="+",
+                   choices=["l1", "l2", "l3", "priority", "sentiment"],
+                   help="Subset of tasks to train jointly (alternative to --multi-task)")
     p.add_argument("--multi-task", action="store_true",
                    help="Train all 5 tasks (L1, L2, L3, Priority, Sentiment) jointly")
     p.add_argument("--model", default="UBC-NLP/MARBERTv2",
@@ -67,9 +77,16 @@ def main():
     print(f"Device: {device} | FP16: {use_fp16}")
 
     data_dir = Path(args.data_dir)
-    tasks = ["l1", "l2", "l3", "priority", "sentiment"] if args.multi_task else [args.task]
-    task_label = "multi_task" if args.multi_task else args.task
-    
+    if args.multi_task:
+        tasks = ["l1", "l2", "l3", "priority", "sentiment"]
+        task_label = "multi_task"
+    elif args.tasks:
+        tasks = args.tasks
+        task_label = "_".join(tasks)
+    else:
+        tasks = [args.task]
+        task_label = args.task
+
     out_dir = Path(args.output_dir) / f"marbert_{task_label}_best"
     out_dir.mkdir(parents=True, exist_ok=True)
 

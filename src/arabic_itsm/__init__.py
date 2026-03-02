@@ -6,4 +6,4 @@ Professional Master's in Cloud Computing Networks, February 2026.
 """
 
 __version__ = "0.1.0"
-__author__ = "Mohamed Adel Ebrahim Elbaz"
+__author__ = "Mohamed A. Elbaz"

@@ -2,7 +2,7 @@
 ## Arabic ITSM Ticket Classification — Kaggle L3-Only Run
 
 **Project**: Cloud-Based ITSM Ticket Classification Platform Using Fine-Tuned Transformer Models
-**Author**: Mohamed Adel Ebrahim Elbaz
+**Author**: Mohamed A. Elbaz
 **Supervisor**: Dr. Eman E. Sanad, FCAI, Cairo University
 **Date**: February 24, 2026
 **Environment**: Kaggle GPU (Tesla T4 × 2, 15 GB VRAM each)

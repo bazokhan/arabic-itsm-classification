@@ -2,7 +2,7 @@
 ## Scaling to L3 and Multi-Task Models via Google Colab & Kaggle
 
 **Project**: Cloud-Based ITSM Ticket Classification Platform Using Fine-Tuned Transformer Models  
-**Author**: Mohamed Adel Ebrahim Elbaz  
+**Author**: Mohamed A. Elbaz  
 **Status**: Experimental Phase Completion  
 
 ---

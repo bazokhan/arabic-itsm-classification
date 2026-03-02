@@ -2,7 +2,7 @@
 
 **Date**: February 2026
 **Status**: Accepted
-**Author**: Mohamed Adel Ebrahim Elbaz
+**Author**: Mohamed A. Elbaz
 
 ---
 

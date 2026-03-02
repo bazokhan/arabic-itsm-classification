@@ -2,7 +2,7 @@
 ## Arabic ITSM Ticket Classification — Notebook 09 (Full Multi-Task, Kaggle GPU)
 
 **Project**: Cloud-Based ITSM Ticket Classification Platform Using Fine-Tuned Transformer Models
-**Author**: Mohamed Adel Ebrahim Elbaz
+**Author**: Mohamed A. Elbaz
 **Supervisor**: Dr. Eman E. Sanad, FCAI, Cairo University
 **Date**: TBD (pending Kaggle run)
 **Environment**: Kaggle GPU (Tesla T4)

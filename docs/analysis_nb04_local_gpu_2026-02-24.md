@@ -2,7 +2,7 @@
 ## Arabic ITSM Ticket Classification — Run 002 (Post-Fix GPU Execution)
 
 **Project**: Cloud-Based ITSM Ticket Classification Platform Using Fine-Tuned Transformer Models  
-**Author**: Mohamed Adel Ebrahim Elbaz  
+**Author**: Mohamed A. Elbaz  
 **Supervisor**: Dr. Eman E. Sanad, FCAI, Cairo University  
 **Date**: February 24, 2026
 

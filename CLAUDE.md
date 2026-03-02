@@ -20,7 +20,7 @@ It will serve as a primary source for the university post-project documentation 
 | Field            | Value                                                                 |
 |------------------|-----------------------------------------------------------------------|
 | **Title**        | Cloud-Based ITSM Ticket Classification Platform Using Fine-Tuned Transformer Models |
-| **Author**       | Mohamed Adel Ebrahim Elbaz                                           |
+| **Author**       | Mohamed A. Elbaz                                           |
 | **Supervisor**   | Dr. Eman E. Sanad, Assistant Professor of IT, FCAI, Cairo University |
 | **Degree**       | Professional Master's in Cloud Computing Networks                    |
 | **Institution**  | Faculty of Computers and Artificial Intelligence, Cairo University    |

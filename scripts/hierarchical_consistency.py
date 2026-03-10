@@ -159,8 +159,8 @@ def main():
 
     print("Building taxonomy from training data...")
     l1_to_l2, l2_to_l3 = build_taxonomy(train_df)
-    print(f"  L1 classes: {len(l1_to_l2)} | L2 classes: {sum(len(v) for v in l1_to_l2.values())} valid L1→L2 pairs")
-    print(f"  L2 classes: {len(l2_to_l3)} | L3 classes: {sum(len(v) for v in l2_to_l3.values())} valid L2→L3 pairs")
+    print(f"  L1 classes: {len(l1_to_l2)} | L2 classes: {sum(len(v) for v in l1_to_l2.values())} valid L1->L2 pairs")
+    print(f"  L2 classes: {len(l2_to_l3)} | L3 classes: {sum(len(v) for v in l2_to_l3.values())} valid L2->L3 pairs")
 
     tasks = ["l1", "l2", "l3"]
     num_classes = {t: len(label_encoders[t].classes_) for t in tasks}
@@ -211,8 +211,8 @@ def main():
     incons_full_rate = inconsistent_full / n
 
     print(f"\nHierarchical inconsistency rates (n={n}):")
-    print(f"  L1→L2: {inconsistent_l1_l2}/{n} = {incons_l1_l2_rate:.4f} ({incons_l1_l2_rate*100:.2f}%)")
-    print(f"  L2→L3: {inconsistent_l2_l3}/{n} = {incons_l2_l3_rate:.4f} ({incons_l2_l3_rate*100:.2f}%)")
+    print(f"  L1->L2: {inconsistent_l1_l2}/{n} = {incons_l1_l2_rate:.4f} ({incons_l1_l2_rate*100:.2f}%)")
+    print(f"  L2->L3: {inconsistent_l2_l3}/{n} = {incons_l2_l3_rate:.4f} ({incons_l2_l3_rate*100:.2f}%)")
     print(f"  Full:  {inconsistent_full}/{n} = {incons_full_rate:.4f} ({incons_full_rate*100:.2f}%)")
 
     # --- Uncorrected F1 ---
@@ -232,7 +232,7 @@ def main():
     delta_l2 = f1_l2_corrected - f1_l2_raw
     delta_l3 = f1_l3_corrected - f1_l3_raw
 
-    print(f"Corrected macro-F1:   L2={f1_l2_corrected:.4f} (Δ{delta_l2:+.4f}) | L3={f1_l3_corrected:.4f} (Δ{delta_l3:+.4f})")
+    print(f"Corrected macro-F1:   L2={f1_l2_corrected:.4f} (d{delta_l2:+.4f}) | L3={f1_l3_corrected:.4f} (d{delta_l3:+.4f})")
 
     # Verify correction removed inconsistencies
     post_incons_l1_l2 = sum(

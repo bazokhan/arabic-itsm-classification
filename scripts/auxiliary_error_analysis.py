@@ -58,6 +58,7 @@ def run_inference_all_tasks(
     batch_size: int = 64,
 ) -> dict[str, list]:
     model.eval()
+    model.to(device)
     texts = (test_df["text"].fillna("") if "text" in test_df.columns
              else (test_df["title_ar"].fillna("") + " " + test_df["description_ar"].fillna("")))
     texts = [normalizer(t) for t in texts.tolist()]

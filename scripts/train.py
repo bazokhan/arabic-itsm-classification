@@ -187,6 +187,44 @@ def main():
     print(f"\nDone. Best val avg macro-F1: {best_f1:.4f}")
     print(f"Checkpoint: {out_dir}")
 
+    # --- Final test-set evaluation (saved for multi-seed aggregation) ---
+    print("\nRunning final test-set evaluation...")
+    test_df = pd.read_csv(data_dir / "test.csv")
+    test_ds = ITSMDataset(test_df, tokenizer, normalizer, active_encoders,
+                          args.max_length, tasks=tasks)
+    test_loader = DataLoader(test_ds, batch_size=args.batch_size * 2, shuffle=False)
+
+    # Reload best checkpoint
+    from transformers import AutoModel
+    model.heads.load_state_dict(torch.load(out_dir / "heads.pt", map_location=device))
+    model.encoder = AutoModel.from_pretrained(str(out_dir)).to(device)
+    model.eval()
+
+    test_preds = {t: [] for t in tasks}
+    test_labels = {t: [] for t in tasks}
+    with torch.no_grad():
+        for batch in test_loader:
+            ids = batch["input_ids"].to(device)
+            mask = batch["attention_mask"].to(device)
+            out = model(ids, mask)
+            for t in tasks:
+                preds = torch.argmax(out[f"logits_{t}"], dim=-1)
+                test_preds[t].extend(preds.cpu().numpy())
+                test_labels[t].extend(batch[f"label_{t}"].numpy())
+
+    test_metrics = {}
+    for t in tasks:
+        m = compute_classification_metrics(test_labels[t], test_preds[t])
+        test_metrics[f"{t}_macro_f1"] = m["macro_f1"]
+        test_metrics[f"{t}_accuracy"] = m.get("accuracy", 0.0)
+        print(f"  Test {t:<10}: macro_f1={m['macro_f1']:.4f}")
+
+    import json
+    metrics_path = out_dir / "test_metrics.json"
+    with open(metrics_path, "w") as f:
+        json.dump(test_metrics, f, indent=2)
+    print(f"Test metrics saved to {metrics_path}")
+
 
 if __name__ == "__main__":
     main()

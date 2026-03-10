@@ -182,3 +182,11 @@ Once you have downloaded the weights (`heads.pt`) and the configuration (`config
    ```
 
 This workflow ensures that you use the cloud purely as a "Compute Engine" while keeping your code and inference logic locally managed.
+
+---
+
+## Encoder Comparison: Evaluating a New Checkpoint After Kaggle Training
+
+After downloading and extracting a new checkpoint (e.g., `arabert_l1_l2_l3_best` from EXP-007), run the comparison script from the **server repo** to evaluate it against an existing checkpoint on the fixed test split. See `arabic-itsm-server/docs/model_comparison_methodology.md` for the exact command and argument reference.
+
+The script produces `model_comparison_report.json` in `arabic-itsm-server/static/reports/`, which feeds directly into the `/research` page and serves as the source of truth for paper metrics.

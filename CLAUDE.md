@@ -125,6 +125,7 @@ It will serve as a primary source for the university post-project documentation 
 | EXP-002 | 2026-02-24 | L1 | MarBERTv2 | 3 (early stop) | 2e-5 | 32 | 0.1316 | 0.1236 | **FAILED** — CPU-only training (`torch+cpu` build). Mode collapsed to "Service". Archived in `docs/analysis_run_001.md` |
 | EXP-003 | 2026-02-24 | L1 | MarBERTv2 (GPU) | 4 (best at epoch 2) | 2e-5 | 32 | **0.8938** | **0.8910** | **SUCCESS** — CUDA+FP16 run. Accuracy 0.8904, infer 9.2ms/sample. Detailed analysis: `docs/analysis_nb04_local_gpu_2026-02-24.md` |
 | EXP-004 | 2026-02-24 | L3 only | MarBERTv2 (Kaggle T4) | 10 (best at epoch 6) | 1e-5 | 16 | **0.7924** | TBD | **SUCCESS** — Kaggle single-task L3 run. 48 classes. Checkpoint: `marbert_l3only_kaggle/`. Analysis: `docs/analysis_kaggle_l3only_kaggle_gpu_2026-02-24.md` |
+| EXP-007 | TBD | L1+L2+L3 | AraBERTv2-base (Kaggle T4) | 10 | 1e-5 | 16 | TBD | TBD | **PENDING** — Encoder ablation vs EXP-006a. Only variable: `aubmindlab/bert-base-arabertv02` instead of MARBERTv2. Notebook: `kaggle_train_arabert_l1l2l3_arabic_itsm_classification.ipynb` |
 
 ---
 
@@ -169,6 +170,7 @@ It will serve as a primary source for the university post-project documentation 
 | L3-only checkpoint (1 head)     | `models/marbert_l3only_kaggle/`                   |
 | L1+L2+L3 checkpoint (3 heads)   | `models/marbert_l1_l2_l3_best/` *(pending Kaggle)* |
 | Multi-task checkpoint (5 heads) | `models/marbert_multi_task_best/` *(pending Kaggle)* |
+| AraBERTv2 L1+L2+L3 checkpoint (3 heads) | `models/arabert_l1_l2_l3_best/` *(pending EXP-007)* |
 | Results (metrics)               | `results/metrics/`                                |
 | Results (figures)               | `results/figures/`                                |
 
@@ -183,6 +185,7 @@ It will serve as a primary source for the university post-project documentation 
 | `marbert_l3only_kaggle/` | L3 only | 1 | Kaggle GPU (T4) | Done — Kaggle NB (EXP-004), val F1=0.7924 |
 | `marbert_l1_l2_l3_best/` | L1+L2+L3 | 3 | Kaggle GPU (T4) | Pending — new Kaggle NB (Notebook 08) |
 | `marbert_multi_task_best/` | All 5 | 5 | Kaggle GPU (T4) | Pending — new Kaggle NB (Notebook 09) |
+| `arabert_l1_l2_l3_best/` | L1+L2+L3 | 3 | Kaggle GPU (T4) | Pending — EXP-007, `kaggle_train_arabert_l1l2l3_arabic_itsm_classification.ipynb` |
 
 ---
 

@@ -1,0 +1,169 @@
+{
+  "priority": {
+    "macro_f1": 0.15367,
+    "n_classes": 5,
+    "class_names": [
+      "1",
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "test_true_distribution": {
+      "1": 54,
+      "2": 288,
+      "3": 527,
+      "4": 385,
+      "5": 179
+    },
+    "test_pred_distribution": {
+      "2": 43,
+      "3": 1044,
+      "4": 346
+    },
+    "train_true_distribution": {
+      "1": 276,
+      "2": 1357,
+      "3": 2307,
+      "4": 1914,
+      "5": 830
+    },
+    "class_separability": {
+      "n_classes": 5,
+      "mean_inter_class_cosine_distance": 0.014848,
+      "note": "Higher distance → classes are more textually distinct. Values near 0 suggest labels cannot be reliably predicted from text features."
+    },
+    "per_class_f1": {
+      "1": 0.0,
+      "2": 0.0483,
+      "3": 0.471,
+      "4": 0.249,
+      "5": 0.0
+    },
+    "misclassification_examples": [
+      {
+        "true_label": "3",
+        "pred_label": "4",
+        "text_excerpt": "الاكونت بتاعي مقفول يا ريت حد يشوفلي ايه المشكلة في account locked، بقاله كتير بيطلعلي رسائل خطا ومش فاهم ايه السبب."
+      },
+      {
+        "true_label": "3",
+        "pred_label": "4",
+        "text_excerpt": "الاداء متذبذب المشكلة مستمرة من يومين. جربت restart وبرضه نفس الوضع. لو محتاجين لوجز انا جاهز. بقالها 7 ساعة تقريبا. جربت ريستارت وكمان عملت repair بس نفس المشكلة."
+      },
+      {
+        "true_label": "2",
+        "pred_label": "4",
+        "text_excerpt": "عايز صلاحيات زيادة الـ role request بقاله يومين مش شغال معايا خالص، جربت ارستر الجهاز وبرضه مفيش فايدة. بقالها 40 ساعة تقريبا. لو محتاجين لوجز او سكرينشوت انا جاهز ابعتها."
+      },
+      {
+        "true_label": "2",
+        "pred_label": "3",
+        "text_excerpt": "مشكلة في الشاشة المشكلة مستمرة من يومين. جربت restart وبرضه نفس الوضع. لو محتاجين لوجز انا جاهز. بقالها 8 ساعة تقريبا. المشكلة بتظهر وتختفي، ومش ثابتة على طول."
+      },
+      {
+        "true_label": "2",
+        "pred_label": "3",
+        "text_excerpt": "مشكلة في التكامل - 309 البيانات مش بتسمع في السيستم التاني. بقالها 40 ساعة تقريبا. المشكلة بتظهر وتختفي، ومش ثابتة على طول."
+      },
+      {
+        "true_label": "2",
+        "pred_label": "3",
+        "text_excerpt": "مش عارف افتح اي موقع عندي استفسار بخصوص no internet، هل فيه تحديث جديد او حاجة لازم اعملها؟. بقالها 24 ساعة تقريبا. لو محتاجين لوجز او سكرينشوت انا جاهز ابعتها."
+      },
+      {
+        "true_label": "5",
+        "pred_label": "3",
+        "text_excerpt": "عطل في print failure الـ print failure مش راضي يفتح معايا، جربت كذا مرة وبرضه مفيش نتيجة. بقالها 4 ساعة تقريبا. المشكلة بتظهر وتختفي، ومش ثابتة على طول."
+      },
+      {
+        "true_label": "4",
+        "pred_label": "3",
+        "text_excerpt": "اكونت جديد عايزين نفتح اكونت لمتدرب جديد في قسم الماركتنج. بقالها 40 ساعة تقريبا. المشكلة بتظهر وتختفي، ومش ثابتة على طول. الموضوع مؤثر على الديدلاين بتاعي النهارده. ملاحظة: ظهرت المشكلة حوالي الساعة 22:47 في مبنى a - الدور 5 على macos 14."
+      }
+    ],
+    "interpretation": "Inter-class cosine distance of 0.0148 suggests labels are NOT well-separated in TF-IDF space. Macro-F1 of 0.1537 is near-random baseline."
+  },
+  "sentiment": {
+    "macro_f1": 0.240689,
+    "n_classes": 4,
+    "class_names": [
+      "mixed",
+      "negative",
+      "neutral",
+      "positive"
+    ],
+    "test_true_distribution": {
+      "mixed": 354,
+      "negative": 392,
+      "neutral": 362,
+      "positive": 325
+    },
+    "test_pred_distribution": {
+      "mixed": 403,
+      "negative": 449,
+      "neutral": 245,
+      "positive": 336
+    },
+    "train_true_distribution": {
+      "mixed": 1647,
+      "negative": 1746,
+      "neutral": 1650,
+      "positive": 1641
+    },
+    "class_separability": {
+      "n_classes": 4,
+      "mean_inter_class_cosine_distance": 0.007116,
+      "note": "Higher distance → classes are more textually distinct. Values near 0 suggest labels cannot be reliably predicted from text features."
+    },
+    "per_class_f1": {
+      "mixed": 0.2668,
+      "negative": 0.302,
+      "neutral": 0.1549,
+      "positive": 0.239
+    },
+    "misclassification_examples": [
+      {
+        "true_label": "negative",
+        "pred_label": "neutral",
+        "text_excerpt": "سؤال بخصوص الايميلات مش بتوصل سؤال بخصوص بعت كذا ايميل والناس بتقول مفيش حاجة وصلت. ضروري جدا. بقالها 35 ساعة تقريبا. المشكلة بتظهر وتختفي، ومش ثابتة على طول."
+      },
+      {
+        "true_label": "neutral",
+        "pred_label": "positive",
+        "text_excerpt": "blocked site المشكلة مستمرة من يومين. جربت restart وبرضه نفس الوضع. لو محتاجين لوجز انا جاهز. بقالها 9 ساعة تقريبا. محتاج الموضوع يتحل بسرعة لو سمحتوا."
+      },
+      {
+        "true_label": "negative",
+        "pred_label": "neutral",
+        "text_excerpt": "طلب لابتوب جديد - 348 اللابتوب بتاعي قديم اوي وبقى بطيء جدا. بقالها 2 ساعة تقريبا. المشكلة بتظهر وتختفي، ومش ثابتة على طول."
+      },
+      {
+        "true_label": "negative",
+        "pred_label": "mixed",
+        "text_excerpt": "ترقية صلاحياتي فيه مشكلة مرتبطة بـ access / permissions / role request. الموضوع ماثر على الشغل ومحتاج يتحل بسرعة. الموضوع مؤثر على الديدلاين بتاعي النهارده. ملاحظة: ظهرت المشكلة حوالي الساعة 15:58 في مبنى a - الدور 4 على ubuntu 22.04."
+      },
+      {
+        "true_label": "positive",
+        "pred_label": "negative",
+        "text_excerpt": "سؤال بخصوص نسيت الباسورد سؤال بخصوص مش عارف ادخل على السيستم، الباسورد مش شغال خالص. مع الشكر. بقالها 8 ساعة تقريبا. المشكلة بتظهر وتختفي، ومش ثابتة على طول."
+      },
+      {
+        "true_label": "mixed",
+        "pred_label": "negative",
+        "text_excerpt": "عطل في print failure الـ print failure مش راضي يفتح معايا، جربت كذا مرة وبرضه مفيش نتيجة. بقالها 40 ساعة تقريبا. المشكلة بتظهر وتختفي، ومش ثابتة على طول. الموضوع مؤثر على الديدلاين بتاعي النهارده. ملاحظة: ظهرت المشكلة حوالي الساعة 21:42 في مبنى a - الدور 6 على ubuntu 22.04."
+      },
+      {
+        "true_label": "mixed",
+        "pred_label": "negative",
+        "text_excerpt": "البطارية بتخلص بسرعة اللاب توب البطارية بتاعته مابتكملش نص ساعة وبتفصل. الجهاز لسه جديد بس البطارية شكلها فيها مشكلة."
+      },
+      {
+        "true_label": "neutral",
+        "pred_label": "negative",
+        "text_excerpt": "كراش في الاكسيل انا لسة موظف جديد ومحتاج اظبط crash بتاعي، كلمت المدير وقالي ابعت لكم تيكت. نسخة الاوفيس: office 2019. الملفات على share داخلي. بقالها 4 ساعة تقريبا."
+      }
+    ],
+    "interpretation": "Inter-class cosine distance of 0.0071 suggests labels are NOT well-separated in TF-IDF space. Macro-F1 of 0.2407 is near-random baseline."
+  }
+}

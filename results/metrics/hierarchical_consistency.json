@@ -1,0 +1,31 @@
+{
+  "model_dir": "models\\marbert_l1_l2_l3_best",
+  "model_name": "UBC-NLP/MARBERTv2",
+  "n_test": 1433,
+  "inconsistency": {
+    "l1_l2_count": 41,
+    "l1_l2_rate": 0.028611,
+    "l1_l2_pct": 2.86,
+    "l2_l3_count": 51,
+    "l2_l3_rate": 0.03559,
+    "l2_l3_pct": 3.56,
+    "full_count": 69,
+    "full_rate": 0.048151,
+    "full_pct": 4.82
+  },
+  "macro_f1_uncorrected": {
+    "l1": 0.88381,
+    "l2": 0.870476,
+    "l3": 0.775194
+  },
+  "macro_f1_corrected": {
+    "l2": 0.871457,
+    "l3": 0.773484,
+    "delta_l2": 0.000981,
+    "delta_l3": -0.00171
+  },
+  "post_correction_inconsistencies": {
+    "l1_l2_remaining": 0,
+    "l2_l3_remaining": 0
+  }
+}

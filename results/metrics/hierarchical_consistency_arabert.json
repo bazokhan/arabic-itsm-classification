@@ -1,0 +1,31 @@
+{
+  "model_dir": "models\\arabert_l1_l2_l3_best",
+  "model_name": "aubmindlab/bert-base-arabertv02",
+  "n_test": 1433,
+  "inconsistency": {
+    "l1_l2_count": 60,
+    "l1_l2_rate": 0.04187,
+    "l1_l2_pct": 4.19,
+    "l2_l3_count": 78,
+    "l2_l3_rate": 0.054431,
+    "l2_l3_pct": 5.44,
+    "full_count": 103,
+    "full_rate": 0.071877,
+    "full_pct": 7.19
+  },
+  "macro_f1_uncorrected": {
+    "l1": 0.888277,
+    "l2": 0.873313,
+    "l3": 0.800586
+  },
+  "macro_f1_corrected": {
+    "l2": 0.8728,
+    "l3": 0.80027,
+    "delta_l2": -0.000513,
+    "delta_l3": -0.000316
+  },
+  "post_correction_inconsistencies": {
+    "l1_l2_remaining": 0,
+    "l2_l3_remaining": 0
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "description": "Cross-generator generalization test: models trained on Gemini-generated data evaluated on Claude-generated tickets with the same taxonomy. Delta = cross_gen_F1 - within_gen_F1.",
+  "results": [
+    {
+      "model": "MARBERTv2 L1+L2+L3",
+      "checkpoint": "models\\marbert_l1_l2_l3_best",
+      "n_cross_gen": 144,
+      "cross_gen_source": "Claude (claude-opus-4-6)",
+      "within_gen_source": "Gemini (gemini-3-flash)",
+      "cross_gen_macro_f1": {
+        "l1": 0.711681,
+        "l2": 0.698973,
+        "l3": 0.67405
+      },
+      "within_gen_macro_f1": {},
+      "delta_cross_minus_within": {}
+    },
+    {
+      "model": "AraBERTv2 L1+L2+L3",
+      "checkpoint": "models\\arabert_l1_l2_l3_best",
+      "n_cross_gen": 144,
+      "cross_gen_source": "Claude (claude-opus-4-6)",
+      "within_gen_source": "Gemini (gemini-3-flash)",
+      "cross_gen_macro_f1": {
+        "l1": 0.735096,
+        "l2": 0.711641,
+        "l3": 0.669345
+      },
+      "within_gen_macro_f1": {},
+      "delta_cross_minus_within": {}
+    }
+  ]
+}

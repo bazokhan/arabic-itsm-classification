@@ -1,24 +1,32 @@
 """
-MarBERTv2-based multi-task classifier for Arabic ITSM tickets.
+Multi-task classifier for Arabic ITSM tickets.
 
-Architecture: shared MarBERT encoder + independent linear classification heads.
-Supports L1, L2, and priority prediction simultaneously.
+Architecture: shared encoder + independent linear classification heads.
+Supports BERT-family encoders (CLS pooling) and T5-family encoders (mean pooling).
+Supports L1, L2, L3, Priority, and Sentiment prediction simultaneously.
 """
 
 from __future__ import annotations
 
+import re
+
 import torch
 import torch.nn as nn
-from transformers import AutoModel, PreTrainedModel
+from transformers import AutoModel, T5EncoderModel, PreTrainedModel
+
+
+def _is_t5_model(model_name: str) -> bool:
+    """Return True if the model name indicates a T5-family encoder (e.g. ByT5, mT5)."""
+    return bool(re.search(r't5', str(model_name), re.IGNORECASE))
 
 
 class MarBERTClassifier(nn.Module):
     """
-    Shared-encoder multi-task classifier built on MarBERTv2.
+    Shared-encoder multi-task classifier.
 
-    The [CLS] token representation from MarBERT is passed through a dropout
-    layer and then into independent linear heads — one per classification task.
-    Losses are averaged across active tasks during training.
+    For BERT-family models (MARBERTv2, AraBERTv2, etc.) the [CLS] token is used.
+    For T5-family models (ByT5, mT5, etc.) mean pooling over encoder outputs is used,
+    and T5EncoderModel is loaded instead of the full seq2seq T5Model.
 
     Parameters
     ----------
@@ -27,7 +35,7 @@ class MarBERTClassifier(nn.Module):
     num_classes : dict[str, int]
         Number of output classes per task, e.g. {"l1": 6, "l2": 14, "priority": 5}.
     dropout : float
-        Dropout rate applied to the [CLS] representation before each head.
+        Dropout rate applied to the pooled representation before each head.
     """
 
     def __init__(
@@ -41,7 +49,11 @@ class MarBERTClassifier(nn.Module):
         if num_classes is None:
             num_classes = {"l1": 6}
 
-        self.encoder: PreTrainedModel = AutoModel.from_pretrained(model_name)
+        self._use_mean_pool = _is_t5_model(model_name)
+        if self._use_mean_pool:
+            self.encoder: PreTrainedModel = T5EncoderModel.from_pretrained(model_name)
+        else:
+            self.encoder: PreTrainedModel = AutoModel.from_pretrained(model_name)
         hidden_size = self.encoder.config.hidden_size
 
         self.heads = nn.ModuleDict(
@@ -78,11 +90,18 @@ class MarBERTClassifier(nn.Module):
             logits_<task> — raw logits per task
         """
         encoder_kwargs = dict(input_ids=input_ids, attention_mask=attention_mask)
-        if token_type_ids is not None:
+        if not self._use_mean_pool and token_type_ids is not None:
             encoder_kwargs["token_type_ids"] = token_type_ids
 
         outputs = self.encoder(**encoder_kwargs)
-        cls = outputs.last_hidden_state[:, 0, :]  # [CLS] token
+
+        if self._use_mean_pool:
+            # Mean pooling over all non-padding token positions (for T5-family)
+            hidden = outputs.last_hidden_state
+            mask_expanded = attention_mask.unsqueeze(-1).float()
+            cls = (hidden * mask_expanded).sum(dim=1) / mask_expanded.sum(dim=1).clamp(min=1e-9)
+        else:
+            cls = outputs.last_hidden_state[:, 0, :]  # [CLS] token (for BERT-family)
 
         result = {}
         total_loss = None

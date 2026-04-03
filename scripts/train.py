@@ -195,9 +195,13 @@ def main():
     test_loader = DataLoader(test_ds, batch_size=args.batch_size * 2, shuffle=False)
 
     # Reload best checkpoint
-    from transformers import AutoModel
+    from transformers import AutoModel, T5EncoderModel
+    from arabic_itsm.models.classifier import _is_t5_model
     model.heads.load_state_dict(torch.load(out_dir / "heads.pt", map_location=device))
-    model.encoder = AutoModel.from_pretrained(str(out_dir)).to(device)
+    if _is_t5_model(args.model):
+        model.encoder = T5EncoderModel.from_pretrained(str(out_dir)).to(device)
+    else:
+        model.encoder = AutoModel.from_pretrained(str(out_dir)).to(device)
     model.eval()
 
     test_preds = {t: [] for t in tasks}

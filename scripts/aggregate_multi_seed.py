@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 
-CONFIGS_ORDER = ["marbert_l1", "marbert_l1l2l3", "marbert_5heads", "arabert_l1l2l3"]
+CONFIGS_ORDER = ["marbert_l1", "marbert_l1l2l3", "marbert_5heads", "arabert_l1l2l3", "egybert_l1l2l3"]
 TASK_LEVELS = ["l1", "l2", "l3", "priority", "sentiment"]
 
 

@@ -11,9 +11,9 @@ This script wraps the logic in Notebook 04 into a reusable CLI suitable
 for running on cloud compute (Colab, Kaggle, cloud VM) or locally.
 
 Output directory naming:
-    --task l3             → models/marbert_l3_best/
-    --tasks l1 l2 l3      → models/marbert_l1_l2_l3_best/
-    --multi-task          → models/marbert_multi_task_best/
+    --task l3             → models/<model>_l3_best/
+    --tasks l1 l2 l3      → models/<model>_l1_l2_l3_best/
+    --multi-task          → models/<model>_multi_task_best/
 """
 
 import argparse
@@ -23,8 +23,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
+def model_slug(model_name: str) -> str:
+    name = model_name.split("/")[-1].lower()
+    if "marbert" in name:
+        return "marbert"
+    if "arabert" in name:
+        return "arabert"
+    if "egybert" in name:
+        return "egybert"
+    if "byt5" in name:
+        return "byt5"
+    return name.replace("-", "_")
+
+
 def parse_args():
-    p = argparse.ArgumentParser(description="Fine-tune MarBERTv2 on Arabic ITSM tickets")
+    p = argparse.ArgumentParser(description="Fine-tune an encoder model on Arabic ITSM tickets")
     p.add_argument("--task", default="l1", choices=["l1", "l2", "l3", "priority", "sentiment"],
                    help="Single-task mode (ignored if --multi-task or --tasks is set)")
     p.add_argument("--tasks", nargs="+",
@@ -87,7 +100,9 @@ def main():
         tasks = [args.task]
         task_label = args.task
 
-    out_dir = Path(args.output_dir) / f"marbert_{task_label}_best"
+    checkpoint_name = f"{model_slug(args.model)}_{task_label}_best"
+    output_root = Path(args.output_dir)
+    out_dir = output_root if output_root.name == checkpoint_name else output_root / checkpoint_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     train_df = pd.read_csv(data_dir / "train.csv")
@@ -122,7 +137,7 @@ def main():
     scaler = torch.amp.GradScaler('cuda', enabled=use_fp16)
 
     best_f1 = 0.0
-    mlflow.set_experiment("arabic-itsm-marbert")
+    mlflow.set_experiment("arabic-itsm-transformers")
 
     with mlflow.start_run():
         mlflow.log_params(vars(args))

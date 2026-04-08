@@ -1,12 +1,13 @@
 """
 Cross-generator generalization evaluation.
 
-Loads the trained MARBERTv2 and AraBERTv2 three-task models and evaluates
-them on the Claude-generated cross-generator test set.
+Loads trained three-task models and evaluates them on the Claude-generated
+cross-generator test set.
 
 Compares:
-  - Within-generator F1 (from test_metrics.json in each checkpoint)
-  - Cross-generator F1 (Claude-generated tickets)
+  - Within-generator F1 from results/metrics/multi_seed_summary.json when available
+  - Fallback to checkpoint test_metrics.json for single-run checkpoints
+  - Cross-generator F1 on Claude-generated tickets
 
 Usage:
     python scripts/evaluate_cross_generator.py \
@@ -17,13 +18,14 @@ Outputs:
     results/metrics/cross_generator_results.json
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import pickle
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import torch
 from sklearn.metrics import f1_score
@@ -39,13 +41,25 @@ MODELS = [
     {
         "name": "MARBERTv2 L1+L2+L3",
         "checkpoint": "models/marbert_l1_l2_l3_best",
-        "model_name": "UBC-NLP/MARBERTv2",
+        "summary_key": "marbert_l1l2l3",
         "tasks": ["l1", "l2", "l3"],
     },
     {
         "name": "AraBERTv2 L1+L2+L3",
         "checkpoint": "models/arabert_l1_l2_l3_best",
-        "model_name": "aubmindlab/bert-base-arabertv02",
+        "summary_key": "arabert_l1l2l3",
+        "tasks": ["l1", "l2", "l3"],
+    },
+    {
+        "name": "EgyBERT L1+L2+L3",
+        "checkpoint": "models/egybert_l1_l2_l3_best",
+        "summary_key": "egybert_l1l2l3",
+        "tasks": ["l1", "l2", "l3"],
+    },
+    {
+        "name": "ByT5 L1+L2+L3",
+        "checkpoint": "models/byt5_l1_l2_l3_best",
+        "summary_key": None,
         "tasks": ["l1", "l2", "l3"],
     },
 ]
@@ -55,81 +69,133 @@ def run_inference(
     model: MarBERTClassifier,
     df: pd.DataFrame,
     tokenizer,
-    normalizer,
+    normalizer: ArabicTextNormalizer,
     tasks: list[str],
     max_length: int,
     device: torch.device,
     batch_size: int = 64,
 ) -> dict[str, list[int]]:
     model.eval()
+    model.to(device)
+
     texts = df["text"].fillna("") if "text" in df.columns else (
         df["title_ar"].fillna("") + " " + df["description_ar"].fillna("")
     )
-    texts = [normalizer(t) for t in texts.tolist()]
+    texts = [normalizer(text) for text in texts.tolist()]
 
-    preds = {t: [] for t in tasks}
-    for i in range(0, len(texts), batch_size):
-        batch = texts[i: i + batch_size]
-        enc = tokenizer(batch, max_length=max_length, padding="max_length",
-                        truncation=True, return_tensors="pt")
-        ids = enc["input_ids"].to(device)
-        mask = enc["attention_mask"].to(device)
+    preds = {task: [] for task in tasks}
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start:start + batch_size]
+        encoded = tokenizer(
+            batch,
+            max_length=max_length,
+            padding="max_length",
+            truncation=True,
+            return_tensors="pt",
+        )
+        input_ids = encoded["input_ids"].to(device)
+        attention_mask = encoded["attention_mask"].to(device)
+
         with torch.no_grad():
-            out = model(ids, mask)
-        for t in tasks:
-            p = torch.argmax(out[f"logits_{t}"], dim=-1).cpu().tolist()
-            preds[t].extend(p)
+            outputs = model(input_ids, attention_mask)
+
+        for task in tasks:
+            batch_preds = torch.argmax(outputs[f"logits_{task}"], dim=-1).cpu().tolist()
+            preds[task].extend(batch_preds)
     return preds
 
 
-def encode_labels(df: pd.DataFrame, label_encoders: dict, tasks: list[str]) -> dict:
-    """Encode string category columns using the training LabelEncoders."""
-    label_map = {"l1": "category_level_1", "l2": "category_level_2", "l3": "category_level_3"}
-    encoded = {}
+def encode_labels(df: pd.DataFrame, label_encoders: dict, tasks: list[str]) -> dict[str, dict[str, list[int]]]:
+    label_map = {
+        "l1": "category_level_1",
+        "l2": "category_level_2",
+        "l3": "category_level_3",
+    }
+    encoded: dict[str, dict[str, list[int]]] = {}
     for task in tasks:
         col = label_map.get(task, task)
         if col not in df.columns:
             print(f"  WARNING: column '{col}' not found in cross-generator data")
             continue
-        le: LabelEncoder = label_encoders[task]
-        # Handle unseen labels gracefully
-        valid_mask = df[col].isin(le.classes_)
-        n_invalid = (~valid_mask).sum()
-        if n_invalid > 0:
-            print(f"  WARNING: {n_invalid} tickets have unseen {task} labels, dropping them")
+
+        encoder: LabelEncoder = label_encoders[task]
+        valid_mask = df[col].isin(encoder.classes_)
+        invalid_count = int((~valid_mask).sum())
+        if invalid_count > 0:
+            print(f"  WARNING: {invalid_count} tickets have unseen {task} labels, dropping them")
         filtered = df[valid_mask].copy()
         encoded[task] = {
-            "true": le.transform(filtered[col].tolist()).tolist(),
+            "true": encoder.transform(filtered[col].tolist()).tolist(),
             "df_indices": filtered.index.tolist(),
         }
     return encoded
 
 
-def main():
+def load_within_gen_f1(summary_path: Path, checkpoint_path: Path, summary_key: str | None, tasks: list[str]) -> tuple[dict[str, float], str | None]:
+    if summary_key and summary_path.exists():
+        with open(summary_path, encoding="utf-8") as f:
+            summary = json.load(f).get("summary", {})
+
+        task_summary = summary.get(summary_key, {}).get("tasks", {})
+        within_gen = {}
+        for task in tasks:
+            stats = task_summary.get(task)
+            if stats and "mean" in stats:
+                within_gen[task] = round(float(stats["mean"]), 6)
+        if within_gen:
+            return within_gen, "multi_seed_summary_mean"
+
+    test_metrics_path = checkpoint_path / "test_metrics.json"
+    if test_metrics_path.exists():
+        with open(test_metrics_path, encoding="utf-8") as f:
+            metrics = json.load(f)
+        return (
+            {
+                task: round(float(metrics[f"{task}_macro_f1"]), 6)
+                for task in tasks
+                if f"{task}_macro_f1" in metrics
+            },
+            "checkpoint_test_metrics",
+        )
+
+    return {}, None
+
+
+def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--cross-gen-data",
-                        default="../arabic-itsm-dataset/cross_generator_test.csv")
+    parser.add_argument(
+        "--cross-gen-data",
+        default="../arabic-itsm-dataset/cross_generator_test.csv",
+    )
     parser.add_argument("--label-encoders", default="data/processed/label_encoders.pkl")
+    parser.add_argument(
+        "--within-gen-summary",
+        default="results/metrics/multi_seed_summary.json",
+    )
     parser.add_argument("--output", default="results/metrics/cross_generator_results.json")
     parser.add_argument("--max-length", type=int, default=128)
+    parser.add_argument("--batch-size", type=int, default=64)
     args = parser.parse_args()
 
-    from transformers import AutoTokenizer, AutoModel
+    from transformers import AutoTokenizer
 
-    output_path = Path(args.output)
+    repo_root = Path(__file__).resolve().parents[1]
+    output_path = repo_root / args.output
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     print("Loading cross-generator test data...")
-    cg_path = Path(args.cross_gen_data)
-    if not cg_path.exists():
-        print(f"ERROR: {cg_path} not found. Run arabic-itsm-dataset/scripts/generate_cross_generator_test.py first.")
-        return
-    cg_df = pd.read_csv(cg_path)
-    print(f"  Loaded {len(cg_df)} tickets from {cg_path}")
+    cross_gen_path = (repo_root / args.cross_gen_data).resolve()
+    if not cross_gen_path.exists():
+        raise FileNotFoundError(
+            f"{cross_gen_path} not found. Run arabic-itsm-dataset/scripts/generate_cross_generator_test.py first."
+        )
+    cross_gen_df = pd.read_csv(cross_gen_path)
+    print(f"  Loaded {len(cross_gen_df)} tickets from {cross_gen_path}")
 
-    with open(args.label_encoders, "rb") as f:
+    with open(repo_root / args.label_encoders, "rb") as f:
         label_encoders = pickle.load(f)
 
+    summary_path = repo_root / args.within_gen_summary
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     normalizer = ArabicTextNormalizer()
 
@@ -137,95 +203,106 @@ def main():
 
     for cfg in MODELS:
         print(f"\n=== {cfg['name']} ===")
-        checkpoint = Path(cfg["checkpoint"])
+        checkpoint = repo_root / cfg["checkpoint"]
         if not checkpoint.exists():
             print(f"  Checkpoint not found: {checkpoint}, skipping.")
+            all_results.append(
+                {
+                    "model": cfg["name"],
+                    "checkpoint": str(checkpoint),
+                    "status": "skipped_missing_checkpoint",
+                }
+            )
             continue
 
         tasks = cfg["tasks"]
-        num_classes = {t: len(label_encoders[t].classes_) for t in tasks}
+        num_classes = {task: len(label_encoders[task].classes_) for task in tasks}
+        model = MarBERTClassifier(str(checkpoint), num_classes)
 
-        model = MarBERTClassifier(cfg["model_name"], num_classes)
         heads_path = checkpoint / "heads.pt"
         if not heads_path.exists():
-            print(f"  heads.pt not found, skipping.")
+            print("  heads.pt not found, skipping.")
+            all_results.append(
+                {
+                    "model": cfg["name"],
+                    "checkpoint": str(checkpoint),
+                    "status": "skipped_missing_heads",
+                }
+            )
             continue
         model.heads.load_state_dict(torch.load(heads_path, map_location="cpu"))
-        model.encoder = AutoModel.from_pretrained(str(checkpoint))
-        model.to(device)
 
-        tokenizer = AutoTokenizer.from_pretrained(cfg["model_name"])
+        tokenizer = AutoTokenizer.from_pretrained(str(checkpoint), local_files_only=True)
 
-        # Encode labels
-        encoded = encode_labels(cg_df, label_encoders, tasks)
+        encoded = encode_labels(cross_gen_df, label_encoders, tasks)
         if not encoded:
             print("  No valid labels to evaluate, skipping.")
             continue
 
-        # Use only rows where all tasks have valid labels
-        valid_indices = set(range(len(cg_df)))
-        for task_enc in encoded.values():
-            valid_indices &= set(task_enc["df_indices"])
+        valid_indices = set(range(len(cross_gen_df)))
+        for task_encoded in encoded.values():
+            valid_indices &= set(task_encoded["df_indices"])
         valid_indices = sorted(valid_indices)
 
-        eval_df = cg_df.iloc[valid_indices].reset_index(drop=True)
+        eval_df = cross_gen_df.iloc[valid_indices].reset_index(drop=True)
         print(f"  Evaluating on {len(eval_df)} tickets (after filtering unseen labels)")
 
-        # Run inference
-        preds = run_inference(model, eval_df, tokenizer, normalizer,
-                              tasks, args.max_length, device)
+        preds = run_inference(
+            model,
+            eval_df,
+            tokenizer,
+            normalizer,
+            tasks,
+            args.max_length,
+            device,
+            args.batch_size,
+        )
 
-        # Compute cross-gen F1
         cross_gen_f1 = {}
+        label_map = {
+            "l1": "category_level_1",
+            "l2": "category_level_2",
+            "l3": "category_level_3",
+        }
         for task in tasks:
-            label_map = {"l1": "category_level_1", "l2": "category_level_2", "l3": "category_level_3"}
-            col = label_map[task]
-            le = label_encoders[task]
-            true_enc = le.transform(eval_df[col].tolist())
-            mf1 = f1_score(true_enc, preds[task], average="macro", zero_division=0)
-            cross_gen_f1[task] = round(float(mf1), 6)
-            print(f"  Cross-gen {task}: macro-F1 = {mf1:.4f}")
+            encoder = label_encoders[task]
+            true_encoded = encoder.transform(eval_df[label_map[task]].tolist())
+            score = f1_score(true_encoded, preds[task], average="macro", zero_division=0)
+            cross_gen_f1[task] = round(float(score), 6)
+            print(f"  Cross-gen {task}: macro-F1 = {score:.4f}")
 
-        # Load within-gen F1 from test_metrics.json
-        within_gen_f1 = {}
-        test_metrics_path = checkpoint / "test_metrics.json"
-        if test_metrics_path.exists():
-            with open(test_metrics_path) as f:
-                within_raw = json.load(f)
-            for task in tasks:
-                key = f"{task}_macro_f1"
-                if key in within_raw:
-                    within_gen_f1[task] = round(float(within_raw[key]), 6)
-        else:
-            print(f"  WARNING: {test_metrics_path} not found — within-gen F1 not available")
+        within_gen_f1, within_source = load_within_gen_f1(summary_path, checkpoint, cfg["summary_key"], tasks)
 
-        # Compute delta
         delta_f1 = {}
         for task in tasks:
             if task in within_gen_f1 and task in cross_gen_f1:
-                delta_f1[task] = round(cross_gen_f1[task] - within_gen_f1[task], 6)
-                print(f"  Delta {task}: {delta_f1[task]:+.4f} (within={within_gen_f1[task]:.4f}, cross={cross_gen_f1[task]:.4f})")
+                delta = cross_gen_f1[task] - within_gen_f1[task]
+                delta_f1[task] = round(delta, 6)
+                print(
+                    f"  Delta {task}: {delta:+.4f} "
+                    f"(within={within_gen_f1[task]:.4f}, cross={cross_gen_f1[task]:.4f})"
+                )
 
-        all_results.append({
-            "model": cfg["name"],
-            "checkpoint": str(checkpoint),
-            "n_cross_gen": len(eval_df),
-            "cross_gen_source": "Claude (claude-opus-4-6)",
-            "within_gen_source": "Gemini (gemini-3-flash)",
-            "cross_gen_macro_f1": cross_gen_f1,
-            "within_gen_macro_f1": within_gen_f1,
-            "delta_cross_minus_within": delta_f1,
-        })
-
-    if not all_results:
-        print("\nNo models evaluated. Check checkpoint paths.")
-        return
+        all_results.append(
+            {
+                "model": cfg["name"],
+                "checkpoint": str(checkpoint),
+                "status": "ok",
+                "n_cross_gen": len(eval_df),
+                "cross_gen_source": "Claude (claude-opus-4-6)",
+                "within_gen_source": within_source,
+                "cross_gen_macro_f1": cross_gen_f1,
+                "within_gen_macro_f1": within_gen_f1,
+                "delta_cross_minus_within": delta_f1,
+            }
+        )
 
     output = {
         "description": (
             "Cross-generator generalization test: models trained on Gemini-generated data "
             "evaluated on Claude-generated tickets with the same taxonomy. "
-            "Delta = cross_gen_F1 - within_gen_F1."
+            "Delta = cross_gen_F1 - within_gen_F1. Within-generator F1 is loaded "
+            "from multi-seed summaries when available, otherwise from checkpoint test_metrics.json."
         ),
         "results": all_results,
     }

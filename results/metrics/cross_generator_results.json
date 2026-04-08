@@ -1,33 +1,97 @@
 {
-  "description": "Cross-generator generalization test: models trained on Gemini-generated data evaluated on Claude-generated tickets with the same taxonomy. Delta = cross_gen_F1 - within_gen_F1.",
+  "description": "Cross-generator generalization test: models trained on Gemini-generated data evaluated on Claude-generated tickets with the same taxonomy. Delta = cross_gen_F1 - within_gen_F1. Within-generator F1 is loaded from multi-seed summaries when available, otherwise from checkpoint test_metrics.json.",
   "results": [
     {
       "model": "MARBERTv2 L1+L2+L3",
-      "checkpoint": "models\\marbert_l1_l2_l3_best",
+      "checkpoint": "D:\\AI\\arabic-itsm-classification\\models\\marbert_l1_l2_l3_best",
+      "status": "ok",
       "n_cross_gen": 144,
       "cross_gen_source": "Claude (claude-opus-4-6)",
-      "within_gen_source": "Gemini (gemini-3-flash)",
+      "within_gen_source": "multi_seed_summary_mean",
       "cross_gen_macro_f1": {
         "l1": 0.711681,
         "l2": 0.698973,
         "l3": 0.67405
       },
-      "within_gen_macro_f1": {},
-      "delta_cross_minus_within": {}
+      "within_gen_macro_f1": {
+        "l1": 0.888,
+        "l2": 0.8738,
+        "l3": 0.8066
+      },
+      "delta_cross_minus_within": {
+        "l1": -0.176319,
+        "l2": -0.174827,
+        "l3": -0.13255
+      }
     },
     {
       "model": "AraBERTv2 L1+L2+L3",
-      "checkpoint": "models\\arabert_l1_l2_l3_best",
+      "checkpoint": "D:\\AI\\arabic-itsm-classification\\models\\arabert_l1_l2_l3_best",
+      "status": "ok",
       "n_cross_gen": 144,
       "cross_gen_source": "Claude (claude-opus-4-6)",
-      "within_gen_source": "Gemini (gemini-3-flash)",
+      "within_gen_source": "multi_seed_summary_mean",
       "cross_gen_macro_f1": {
         "l1": 0.735096,
         "l2": 0.711641,
         "l3": 0.669345
       },
-      "within_gen_macro_f1": {},
-      "delta_cross_minus_within": {}
+      "within_gen_macro_f1": {
+        "l1": 0.8921,
+        "l2": 0.8744,
+        "l3": 0.7969
+      },
+      "delta_cross_minus_within": {
+        "l1": -0.157004,
+        "l2": -0.162759,
+        "l3": -0.127555
+      }
+    },
+    {
+      "model": "EgyBERT L1+L2+L3",
+      "checkpoint": "D:\\AI\\arabic-itsm-classification\\models\\egybert_l1_l2_l3_best",
+      "status": "ok",
+      "n_cross_gen": 144,
+      "cross_gen_source": "Claude (claude-opus-4-6)",
+      "within_gen_source": "multi_seed_summary_mean",
+      "cross_gen_macro_f1": {
+        "l1": 0.683734,
+        "l2": 0.619189,
+        "l3": 0.137636
+      },
+      "within_gen_macro_f1": {
+        "l1": 0.8843,
+        "l2": 0.8685,
+        "l3": 0.2306
+      },
+      "delta_cross_minus_within": {
+        "l1": -0.200566,
+        "l2": -0.249311,
+        "l3": -0.092964
+      }
+    },
+    {
+      "model": "ByT5 L1+L2+L3",
+      "checkpoint": "D:\\AI\\arabic-itsm-classification\\models\\byt5_l1_l2_l3_best",
+      "status": "ok",
+      "n_cross_gen": 144,
+      "cross_gen_source": "Claude (claude-opus-4-6)",
+      "within_gen_source": "checkpoint_test_metrics",
+      "cross_gen_macro_f1": {
+        "l1": 0.671517,
+        "l2": 0.619288,
+        "l3": 0.147617
+      },
+      "within_gen_macro_f1": {
+        "l1": 0.874809,
+        "l2": 0.855654,
+        "l3": 0.18408
+      },
+      "delta_cross_minus_within": {
+        "l1": -0.203292,
+        "l2": -0.236366,
+        "l3": -0.036463
+      }
     }
   ]
 }

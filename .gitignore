@@ -42,6 +42,8 @@ data/*
 # MLflow experiment tracking
 mlruns/
 mlartifacts/
+mlflow.db
+*.db
 
 # Weights & Biases
 wandb/
